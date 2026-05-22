@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Robot Control</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; width: 100%; overflow: hidden; }
+
+  :root {
+    --bg:        #0e0e0e;
+    --surface:   #161616;
+    --surface2:  #1e1e1e;
+    --border:    #2a2a2a;
+    --border2:   #383838;
+    --text:      #d4d4d4;
+    --muted:     #666;
+    --accent:    #c8ff00;
+    --accent2:   #8fb800;
+    --warn:      #ff6a00;
+    --danger:    #ff2d2d;
+    --ok:        #00cc66;
+    --key-bg:    #1e1e1e;
+    --key-active:#2a2a2a;
+    --font:      'Courier New', Courier, monospace;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 13px;
+    height: 100vh;
+    max-height: 100vh;
+    width: 100vw;
+    max-width: 100vw;
+    display: grid;
+    grid-template-rows: 36px 1fr 180px;
+    grid-template-columns: minmax(0, 220px) 1fr minmax(0, 220px);
+    grid-template-areas:
+      "header header header"
+      "left   center right"
+      "footer footer footer";
+    gap: 0;
+    overflow: hidden;
+  }
+
+  /* ── Header ── */
+  #header {
+    grid-area: header;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 16px;
+  }
+  #header .title {
+    font-size: 12px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: bold;
+  }
+  #status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--danger);
+    flex-shrink: 0;
+  }
+  #status-dot.connected { background: var(--ok); }
+  #status-text { color: var(--muted); font-size: 11px; }
+  .spacer { flex: 1; }
+  #lock-btn {
+    font-family: var(--font);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    padding: 4px 12px;
+    background: transparent;
+    border: 1px solid var(--border2);
+    color: var(--text);
+    cursor: pointer;
+    text-transform: uppercase;
+  }
+  #lock-btn:hover { border-color: var(--warn); color: var(--warn); }
+  #lock-btn.locked { border-color: var(--danger); color: var(--danger); }
+
+  /* ── Panels ── */
+  #left-panel {
+    grid-area: left;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+    min-width: 0;
+  }
+  #right-panel {
+    grid-area: right;
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+    min-width: 0;
+  }
+  .panel-section {
+    border-bottom: 1px solid var(--border);
+    padding: 10px 12px;
+    flex-shrink: 0;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .panel-label {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  /* ── Center ── */
+  #center {
+    grid-area: center;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+  }
+  .cam-feed {
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    position: relative;
+  }
+  .cam-label {
+    position: absolute;
+    top: 8px; left: 10px;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .cam-icon {
+    width: 32px; height: 32px;
+    opacity: 0.12;
+  }
+  .cam-feed span {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    opacity: 0.5;
+  }
+
+  /* ── Footer ── */
+  #footer {
+    grid-area: footer;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: minmax(0, 200px) 1fr minmax(0, 200px);
+    align-items: center;
+    padding: 0 16px;
+    gap: 16px;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  /* ── Gear indicator ── */
+  #gear-display {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .gear-pip {
+    width: 28px; height: 28px;
+    border: 1px solid var(--border2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: var(--muted);
+    transition: all 0.08s;
+  }
+  .gear-pip.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(200,255,0,0.06);
+  }
+  #gear-label {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-left: 4px;
+  }
+
+  /* ── WASD visualizer ── */
+  #wasd {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .key-row { display: flex; gap: 4px; }
+  .key {
+    width: 34px; height: 34px;
+    border: 1px solid var(--border2);
+    background: var(--key-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+    color: var(--muted);
+    transition: all 0.06s;
+    font-family: var(--font);
+    letter-spacing: 0;
+  }
+  .key.active {
+    background: var(--key-active);
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent2) inset;
+  }
+
+  /* ── Speed / vector display ── */
+  #vector-display {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 8px;
+  }
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .stat-key {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .stat-val {
+    font-size: 13px;
+    color: var(--text);
+    min-width: 40px;
+    text-align: right;
+  }
+  .stat-val.active { color: var(--accent); }
+
+  /* ── Bars ── */
+  .bar-wrap {
+    height: 3px;
+    background: var(--surface2);
+    border: none;
+    margin-top: 2px;
+  }
+  .bar-fill {
+    height: 100%;
+    background: var(--accent2);
+    transition: width 0.1s;
+  }
+  .bar-fill.reverse { background: var(--warn); }
+
+  /* ── Motor telemetry ── */
+  #motor-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    min-width: 0;
+  }
+  .motor-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 6px 8px;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .motor-id {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .motor-vals {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 6px;
+  }
+  .mval {
+    font-size: 11px;
+    color: var(--text);
+    display: flex;
+    justify-content: space-between;
+  }
+  .mval span:first-child { color: var(--muted); font-size: 10px; }
+
+  /* ── Gear speeds ── */
+  #gear-speeds {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .gear-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+  }
+  .gear-num {
+    width: 14px;
+    color: var(--muted);
+    text-align: right;
+    flex-shrink: 0;
+  }
+  .gear-row.current .gear-num { color: var(--accent); }
+  .gear-bar-bg {
+    flex: 1;
+    height: 3px;
+    background: var(--surface2);
+  }
+  .gear-bar-fg {
+    height: 100%;
+    background: var(--border2);
+    transition: width 0.1s;
+  }
+  .gear-row.current .gear-bar-fg { background: var(--accent); }
+  .gear-spd {
+    font-size: 10px;
+    color: var(--muted);
+    min-width: 36px;
+    text-align: right;
+  }
+  .gear-row.current .gear-spd { color: var(--accent); }
+
+  /* ── Log ── */
+  #log-section {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-bottom: 1px solid var(--border);
+    padding: 10px 12px 0;
+  }
+  #log-section .panel-label { flex-shrink: 0; }
+  #log {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 4px 0 8px;
+  }
+  .log-line {
+    display: block;
+    line-height: 1.6;
+  }
+  .log-line {
+    font-size: 10px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .log-line.info  { color: #5599dd; }
+  .log-line.warn  { color: var(--warn); }
+  .log-line.error { color: var(--danger); }
+
+  /* ── WS input ── */
+  #ws-row {
+    display: flex;
+    gap: 6px;
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+    overflow: hidden;
+    min-width: 0;
+  }
+  #ws-connect {
+    flex: 1;
+    background: transparent;
+    border: 1px solid var(--border2);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 10px;
+    padding: 6px 10px;
+    cursor: pointer;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  #ws-connect:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ── WASD center + right-col layout ── */
+  #footer-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+    min-width: 0;
+    overflow: hidden;
+  }
+  #footer-right {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    min-width: 0;
+    overflow: hidden;
+  }
+  #rpm-display {
+    text-align: right;
+  }
+  #rpm-l, #rpm-r {
+    font-size: 22px;
+    font-weight: bold;
+    color: var(--text);
+    line-height: 1;
+    letter-spacing: -0.03em;
+  }
+  .rpm-label {
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .rpm-pair {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+  }
+  .rpm-col { text-align: center; }
+
+  /* ── Settings button ── */
+  #settings-btn {
+    font-family: var(--font);
+    font-size: 14px;
+    padding: 4px 10px;
+    background: transparent;
+    border: 1px solid var(--border2);
+    color: var(--muted);
+    cursor: pointer;
+    line-height: 1;
+  }
+  #settings-btn:hover { border-color: var(--accent2); color: var(--accent); }
+
+  /* ── Settings overlay ── */
+  #settings-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(2px);
+    align-items: center;
+    justify-content: center;
+  }
+  #settings-overlay.open { display: flex; }
+  #settings-panel {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    width: 360px;
+    max-width: 90vw;
+  }
+  #settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  #settings-header span {
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  #settings-close {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 16px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 2px;
+    font-family: var(--font);
+  }
+  #settings-close:hover { color: var(--text); }
+  #settings-body {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .setting-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .setting-group-label {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 2px;
+  }
+  .setting-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .setting-row label {
+    font-size: 12px;
+    color: var(--text);
+    flex: 1;
+  }
+  .setting-row input[type="checkbox"] {
+    accent-color: var(--accent);
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .setting-row input[type="text"] {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 11px;
+    padding: 5px 8px;
+    outline: none;
+    min-width: 0;
+  }
+  .setting-row input[type="text"]:focus { border-color: var(--accent2); }
+  #auto-status {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div id="header">
+  <div id="status-dot"></div>
+  <div class="title">Robot Control</div>
+  <div id="status-text">Disconnected</div>
+  <div class="spacer"></div>
+  <button id="lock-btn" onclick="toggleLock()">Lock</button>
+  <button id="settings-btn" onclick="openSettings()" title="Settings">⚙</button>
+</div>
+
+<!-- LEFT PANEL -->
+<div id="left-panel">
+  <div class="panel-section">
+    <div class="panel-label">Gear</div>
+    <div id="gear-speeds"></div>
+  </div>
+  <div id="log-section">
+    <div class="panel-label">Log</div>
+    <div id="log"></div>
+  </div>
+  <div id="ws-row">
+    <button id="ws-connect" onclick="connectWS()">Connect</button>
+  </div>
+</div>
+
+<!-- CENTER -->
+<div id="center">
+  <div class="cam-feed">
+    <div class="cam-label">CAM 1</div>
+    <svg class="cam-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <rect x="2" y="6" width="20" height="14" rx="2"/>
+      <circle cx="12" cy="13" r="4"/>
+      <path d="M8 6V4h8v2"/>
+    </svg>
+    <span>No signal</span>
+  </div>
+  <div class="cam-feed">
+    <div class="cam-label">CAM 2</div>
+    <svg class="cam-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <rect x="2" y="6" width="20" height="14" rx="2"/>
+      <circle cx="12" cy="13" r="4"/>
+      <path d="M8 6V4h8v2"/>
+    </svg>
+    <span>No signal</span>
+  </div>
+</div>
+
+<!-- RIGHT PANEL -->
+<div id="right-panel">
+  <div class="panel-section">
+    <div class="panel-label">Motors</div>
+    <div id="motor-grid">
+      <div class="motor-card" id="mc1">
+        <div class="motor-id">M1 - FL</div>
+        <div class="motor-vals">
+          <div class="mval"><span>SPD</span><span id="m1-spd">--</span></div>
+          <div class="mval"><span>TOR</span><span id="m1-tor">--</span></div>
+          <div class="mval"><span>TMP</span><span id="m1-tmp">--</span></div>
+          <div class="mval"><span>ERR</span><span id="m1-err">--</span></div>
+        </div>
+      </div>
+      <div class="motor-card" id="mc2">
+        <div class="motor-id">M2 - FR</div>
+        <div class="motor-vals">
+          <div class="mval"><span>SPD</span><span id="m2-spd">--</span></div>
+          <div class="mval"><span>TOR</span><span id="m2-tor">--</span></div>
+          <div class="mval"><span>TMP</span><span id="m2-tmp">--</span></div>
+          <div class="mval"><span>ERR</span><span id="m2-err">--</span></div>
+        </div>
+      </div>
+      <div class="motor-card" id="mc3">
+        <div class="motor-id">M3 - RL</div>
+        <div class="motor-vals">
+          <div class="mval"><span>SPD</span><span id="m3-spd">--</span></div>
+          <div class="mval"><span>TOR</span><span id="m3-tor">--</span></div>
+          <div class="mval"><span>TMP</span><span id="m3-tmp">--</span></div>
+          <div class="mval"><span>ERR</span><span id="m3-err">--</span></div>
+        </div>
+      </div>
+      <div class="motor-card" id="mc4">
+        <div class="motor-id">M4 - RR</div>
+        <div class="motor-vals">
+          <div class="mval"><span>SPD</span><span id="m4-spd">--</span></div>
+          <div class="mval"><span>TOR</span><span id="m4-tor">--</span></div>
+          <div class="mval"><span>TMP</span><span id="m4-tmp">--</span></div>
+          <div class="mval"><span>ERR</span><span id="m4-err">--</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="panel-section" style="flex:1;">
+    <div class="panel-label">Info</div>
+    <div class="stat-row"><span class="stat-key">Linear</span><span class="stat-val" id="info-linear">0.00</span></div>
+    <div class="stat-row"><span class="stat-key">Angular</span><span class="stat-val" id="info-angular">0.00</span></div>
+    <div class="stat-row" style="margin-top:8px;"><span class="stat-key">L RPM</span><span class="stat-val" id="info-lrpm">0</span></div>
+    <div class="stat-row"><span class="stat-key">R RPM</span><span class="stat-val" id="info-rrpm">0</span></div>
+    <div class="stat-row" style="margin-top:8px;"><span class="stat-key">Lock</span><span class="stat-val" id="info-lock">OFF</span></div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<div id="footer">
+  <div id="gear-display"></div>
+
+  <div id="footer-center">
+    <div id="wasd">
+      <div class="key-row"><div class="key" id="key-w">W</div></div>
+      <div class="key-row">
+        <div class="key" id="key-a">A</div>
+        <div class="key" id="key-s">S</div>
+        <div class="key" id="key-d">D</div>
+      </div>
+    </div>
+    <div style="font-size:10px; color:var(--muted); text-align:center; line-height:1.8;">
+      <div>WASD  move</div>
+      <div>G  gear up</div>
+      <div>L  lock toggle</div>
+    </div>
+  </div>
+
+  <div id="footer-right">
+    <div class="rpm-pair">
+      <div class="rpm-col">
+        <div class="rpm-label">L RPM</div>
+        <div id="rpm-l">0</div>
+      </div>
+      <div class="rpm-col">
+        <div class="rpm-label">R RPM</div>
+        <div id="rpm-r">0</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS OVERLAY -->
+<div id="settings-overlay" onclick="overlayClick(event)">
+  <div id="settings-panel">
+    <div id="settings-header">
+      <span>Settings</span>
+      <button id="settings-close" onclick="closeSettings()">✕</button>
+    </div>
+    <div id="settings-body">
+      <div class="setting-group">
+        <div class="setting-group-label">Connection</div>
+        <div class="setting-row">
+          <label for="ws-input">WebSocket URL</label>
+        </div>
+        <div class="setting-row">
+          <input type="text" id="ws-input" value="ws://localhost:8765" placeholder="ws://host:port" />
+        </div>
+        <div class="setting-row" style="margin-top:4px;">
+          <label for="auto-connect-chk">Auto-reconnect</label>
+          <input type="checkbox" id="auto-connect-chk" onchange="toggleAutoConnect()" />
+        </div>
+        <div id="auto-status"></div>
+      </div>
+      <div class="setting-group">
+        <div class="setting-group-label">Drive</div>
+        <div class="setting-row">
+          <label for="auto-brake-chk">Auto-brake on key release</label>
+          <input type="checkbox" id="auto-brake-chk" onchange="toggleAutoBrake()" />
+        </div>
+        <div id="auto-brake-status" style="font-size:10px; color:var(--muted); margin-top:2px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+const MAX_RPM = 200;
+const GEARS   = [40, 80, 120, 160, 200];  // RPM ceiling per gear
+const SEND_HZ = 20;  // command rate in Hz
+
+const THRESHOLDS = {
+  tor: { warn: 0.96, crit: 2.0 },   // Nm: rated torque (warn), stall torque (crit)
+  tmp: { warn: 60,   crit: 75  },
+};
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let ws        = null;
+let gear      = 0;   // 0-indexed gear (0 = gear 1)
+let isLocked  = false;
+let autoBrake = false;
+let keys      = { w:false, a:false, s:false, d:false };
+let lastLinear  = null;
+let lastAngular = null;
+
+// ─── Gear UI build ────────────────────────────────────────────────────────────
+function buildGearUI() {
+  // Gear pips in footer
+  const gd = document.getElementById("gear-display");
+  gd.innerHTML = "";
+  for (let i = 0; i < GEARS.length; i++) {
+    const pip = document.createElement("div");
+    pip.className = "gear-pip" + (i === gear ? " active" : "");
+    pip.id = "gpip-" + i;
+    pip.textContent = i + 1;
+    gd.appendChild(pip);
+  }
+  const lbl = document.createElement("div");
+  lbl.id = "gear-label";
+  lbl.className = "gear-label";
+  lbl.textContent = "Gear";
+  gd.appendChild(lbl);
+
+  // Gear speed list in left panel
+  const gs = document.getElementById("gear-speeds");
+  gs.innerHTML = "";
+  for (let i = 0; i < GEARS.length; i++) {
+    const row = document.createElement("div");
+    row.className = "gear-row" + (i === gear ? " current" : "");
+    row.id = "grow-" + i;
+    const pct = (GEARS[i] / MAX_RPM * 100).toFixed(0);
+    row.innerHTML = `
+      <div class="gear-num">${i+1}</div>
+      <div class="gear-bar-bg"><div class="gear-bar-fg" style="width:${pct}%"></div></div>
+      <div class="gear-spd">${GEARS[i]} rpm</div>`;
+    gs.appendChild(row);
+  }
+}
+
+function updateGearUI() {
+  for (let i = 0; i < GEARS.length; i++) {
+    document.getElementById("gpip-" + i).className = "gear-pip" + (i === gear ? " active" : "");
+    const gr = document.getElementById("grow-" + i);
+    gr.className = "gear-row" + (i === gear ? " current" : "");
+  }
+}
+
+buildGearUI();
+
+// ─── Settings persist ─────────────────────────────────────────────────────────
+function saveSettings() {
+  localStorage.setItem("rc_settings", JSON.stringify({
+    wsUrl:       document.getElementById("ws-input").value,
+    autoConnect: document.getElementById("auto-connect-chk").checked,
+    autoBrake:   document.getElementById("auto-brake-chk").checked,
+  }));
+}
+
+function loadSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem("rc_settings") || "{}");
+    if (s.wsUrl)      document.getElementById("ws-input").value = s.wsUrl;
+    if (s.autoBrake)  {
+      autoBrake = true;
+      document.getElementById("auto-brake-chk").checked = true;
+      document.getElementById("auto-brake-status").textContent = "Brakes engage when all keys released";
+    }
+    if (s.autoConnect) {
+      document.getElementById("auto-connect-chk").checked = true;
+      autoConnect = true;
+      reconnectDelay = 1000;
+      connectWS(true);
+    }
+  } catch(_) {}
+}
+
+// ─── Settings overlay ────────────────────────────────────────────────────────
+function openSettings() {
+  document.getElementById("settings-overlay").classList.add("open");
+}
+function closeSettings() {
+  document.getElementById("settings-overlay").classList.remove("open");
+}
+function overlayClick(e) {
+  if (e.target === document.getElementById("settings-overlay")) closeSettings();
+}
+
+function toggleAutoBrake() {
+  autoBrake = document.getElementById("auto-brake-chk").checked;
+  document.getElementById("auto-brake-status").textContent =
+    autoBrake ? "Brakes engage when all keys released" : "";
+  log("Auto-brake " + (autoBrake ? "ON" : "OFF"), "info");
+  saveSettings();
+}
+
+// ─── WebSocket ────────────────────────────────────────────────────────────────
+let autoConnect    = false;
+let reconnectTimer = null;
+let reconnectDelay = 1000;   // ms, doubles on each failure up to max
+const RECONNECT_MAX = 16000;
+
+function setAutoStatus(msg) {
+  document.getElementById("auto-status").textContent = msg;
+}
+
+function scheduleReconnect() {
+  if (!autoConnect) return;
+  clearTimeout(reconnectTimer);
+  setAutoStatus("retry in " + (reconnectDelay / 1000).toFixed(0) + "s…");
+  reconnectTimer = setTimeout(() => {
+    if (autoConnect) connectWS(true);
+  }, reconnectDelay);
+  reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX);
+}
+
+function toggleAutoConnect() {
+  autoConnect = document.getElementById("auto-connect-chk").checked;
+  if (autoConnect) {
+    reconnectDelay = 1000;
+    connectWS(true);
+  } else {
+    clearTimeout(reconnectTimer);
+    setAutoStatus("");
+  }
+  saveSettings();
+}
+
+function connectWS(silent) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    autoConnect = false;
+    document.getElementById("auto-connect-chk").checked = false;
+    clearTimeout(reconnectTimer);
+    setAutoStatus("");
+    ws.close();
+    return;
+  }
+  const url = document.getElementById("ws-input").value.trim();
+  if (ws) { try { ws.close(); } catch(_) {} ws = null; }
+  if (!silent) log("Connecting to " + url + "...", "info");
+  ws = new WebSocket(url);
+
+  ws.onopen = () => {
+    reconnectDelay = 1000;
+    clearTimeout(reconnectTimer);
+    setAutoStatus(autoConnect ? "connected" : "");
+    setStatus(true);
+    document.getElementById("ws-connect").textContent = "Disconnect";
+    log("Connected", "info");
+  };
+  ws.onclose = () => {
+    setStatus(false);
+    document.getElementById("ws-connect").textContent = "Connect";
+    log("Disconnected", "warn");
+    scheduleReconnect();
+  };
+  ws.onerror = () => {
+    if (!silent) log("Connection error", "error");
+    // onclose fires after onerror, so reconnect is handled there
+  };
+  ws.onmessage = (e) => {
+    try {
+      const obj = JSON.parse(e.data);
+      if (obj.T === 3) updateMotor(obj);
+      else if (obj.T === 21) log("[ESP32] " + obj.info);
+    } catch(_) {}
+  };
+}
+
+function send(obj) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(obj));
+  }
+}
+
+function setStatus(connected) {
+  document.getElementById("status-dot").className = connected ? "connected" : "";
+  document.getElementById("status-text").textContent = connected ? "Connected" : "Disconnected";
+}
+
+// ─── Lock ─────────────────────────────────────────────────────────────────────
+function toggleLock() {
+  isLocked = !isLocked;
+  send({ cmd: "lock", state: isLocked ? 1 : 0 });
+  document.getElementById("lock-btn").className = isLocked ? "locked" : "";
+  document.getElementById("lock-btn").textContent = isLocked ? "Unlock" : "Lock";
+  document.getElementById("info-lock").textContent = isLocked ? "ON" : "OFF";
+  document.getElementById("info-lock").style.color = isLocked ? "var(--danger)" : "";
+  log("Motors " + (isLocked ? "LOCKED" : "RELEASED"), isLocked ? "warn" : "info");
+}
+
+// ─── Key handling (send on change + keepalive) ────────────────────────────────
+
+function setKey(k, active) {
+  const el = document.getElementById("key-" + k);
+  if (el) el.className = "key" + (active ? " active" : "");
+}
+
+// ─── Motion compute + send loop ───────────────────────────────────────────────
+function computeMotion() {
+  let lin = 0, ang = 0;
+  if (keys.w) lin += 1;
+  if (keys.s) lin -= 1;
+  if (keys.a) ang -= 1;
+  if (keys.d) ang += 1;
+
+  // Normalize diagonal
+  if (lin !== 0 && ang !== 0) {
+    lin *= 0.707;
+    ang *= 0.707;
+  }
+
+  const scale = GEARS[gear] / MAX_RPM;
+  lin *= scale;
+  ang *= scale;
+
+  return { linear: lin, angular: ang };
+}
+
+function computeRPM(linear, angular) {
+  const left  = Math.round((linear - angular / 2.0) * MAX_RPM);
+  const right = Math.round((linear + angular / 2.0) * MAX_RPM);
+  return {
+    left:  Math.max(-MAX_RPM, Math.min(MAX_RPM, left)),
+    right: Math.max(-MAX_RPM, Math.min(MAX_RPM, right))
+  };
+}
+
+let lastSentMs = 0;
+const KEEPALIVE_MS = 100;  // send at least every 200ms while moving to beat the 500ms watchdog
+
+function updateRPMDisplay(left, right) {
+  document.getElementById("rpm-l").textContent = left;
+  document.getElementById("rpm-r").textContent = right;
+  document.getElementById("info-lrpm").textContent = left;
+  document.getElementById("info-rrpm").textContent = right;
+  const isMoving = left !== 0 || right !== 0;
+  document.getElementById("rpm-l").style.color = isMoving ? "var(--accent)" : "";
+  document.getElementById("rpm-r").style.color = isMoving ? "var(--accent)" : "";
+}
+
+function sendMotion() {
+  if (isLocked) return;
+  const { linear, angular } = computeMotion();
+  // Skip keepalive if socket buffer is backed up — stale motion packets are harmless to drop
+  if (ws && ws.bufferedAmount > 512) return;
+  send({ cmd: "motion", linear, angular });
+  lastSentMs  = Date.now();
+  lastLinear  = linear;
+  lastAngular = angular;
+
+  const rpm = computeRPM(linear, angular);
+  document.getElementById("rpm-l").textContent = rpm.left;
+  document.getElementById("rpm-r").textContent = rpm.right;
+  document.getElementById("info-linear").textContent  = linear.toFixed(2);
+  document.getElementById("info-angular").textContent = angular.toFixed(2);
+  document.getElementById("info-lrpm").textContent = rpm.left;
+  document.getElementById("info-rrpm").textContent = rpm.right;
+
+  const isMoving = linear !== 0 || angular !== 0;
+  document.getElementById("rpm-l").style.color = isMoving ? "var(--accent)" : "";
+  document.getElementById("rpm-r").style.color = isMoving ? "var(--accent)" : "";
+}
+
+// For key events: always send stop, skip motion if buffer is backed up (stale motion is harmless)
+function sendMotionNow() {
+  if (isLocked) return;
+  const { linear, angular } = computeMotion();
+  const isStopping = linear === 0 && angular === 0;
+
+  // Drop backed-up motion packets — they're already stale.
+  // But never drop a stop command; it must always get through immediately.
+  if (!isStopping && ws && ws.bufferedAmount > 512) return;
+
+  send({ cmd: "motion", linear, angular });
+  lastSentMs  = Date.now();
+  lastLinear  = linear;
+  lastAngular = angular;
+
+  const rpm = computeRPM(linear, angular);
+  document.getElementById("rpm-l").textContent = rpm.left;
+  document.getElementById("rpm-r").textContent = rpm.right;
+  document.getElementById("info-linear").textContent  = linear.toFixed(2);
+  document.getElementById("info-angular").textContent = angular.toFixed(2);
+  document.getElementById("info-lrpm").textContent = rpm.left;
+  document.getElementById("info-rrpm").textContent = rpm.right;
+
+  const isMoving = linear !== 0 || angular !== 0;
+  document.getElementById("rpm-l").style.color = isMoving ? "var(--accent)" : "";
+  document.getElementById("rpm-r").style.color = isMoving ? "var(--accent)" : "";
+}
+
+// Send immediately on any state change — bypasses buffer check
+let autoBraked = false;  // true when auto-brake has engaged (separate from manual isLocked)
+
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT") return;
+  const k = e.key.toLowerCase();
+  let moved = false;
+  if (k === "w") { keys.w = true; setKey("w", true); moved = true; }
+  if (k === "a") { keys.a = true; setKey("a", true); moved = true; }
+  if (k === "s") { keys.s = true; setKey("s", true); moved = true; }
+  if (k === "d") { keys.d = true; setKey("d", true); moved = true; }
+  if (moved) {
+    if (autoBrake && autoBraked && !isLocked) {
+      autoBraked = false;
+      send({ cmd: "lock", state: 0 });   // release brake
+      setTimeout(sendMotionNow, 80);     // give ESP32 time to switch back to speed mode
+    } else {
+      sendMotionNow();
+    }
+  }
+  if (k === "g") { gear = (gear + 1) % GEARS.length; updateGearUI(); sendMotionNow(); log("Gear " + (gear+1) + " — " + GEARS[gear] + " RPM max"); }
+  if (k === "l") { toggleLock(); }
+  if (["w","a","s","d"].includes(k)) e.preventDefault();
+});
+
+document.addEventListener("keyup", e => {
+  const k = e.key.toLowerCase();
+  let moved = false;
+  if (k === "w") { keys.w = false; setKey("w", false); moved = true; }
+  if (k === "a") { keys.a = false; setKey("a", false); moved = true; }
+  if (k === "s") { keys.s = false; setKey("s", false); moved = true; }
+  if (k === "d") { keys.d = false; setKey("d", false); moved = true; }
+  if (moved) {
+    const anyKey = keys.w || keys.a || keys.s || keys.d;
+    if (autoBrake && !anyKey && !isLocked) {
+      autoBraked = true;
+      send({ cmd: "lock", state: 1 });
+      updateRPMDisplay(0, 0);
+    } else {
+      sendMotionNow();
+    }
+  }
+});
+
+// Keepalive: self-throttles via bufferedAmount guard in sendMotionNow
+setInterval(() => {
+  if (isLocked || autoBraked) return;
+  const anyKey = keys.w || keys.a || keys.s || keys.d;
+  if (anyKey && Date.now() - lastSentMs >= KEEPALIVE_MS) sendMotionNow();
+}, 50);
+
+// ─── Motor telemetry ──────────────────────────────────────────────────────────
+// tor is torque current as signed int16: -32767~32767 = -8A~8A
+// Torque constant: 0.75 Nm/A  →  Nm = raw * (8 / 32767) * 0.75
+const TOR_TO_NM = (8 / 32767) * 0.75;  // ≈ 0.0001831 Nm per raw unit
+// Thresholds in Nm:
+//   Rated torque  0.96 Nm  (yellow)
+//   Stall torque  2.0  Nm  (red)
+
+function colorFor(val, warn, crit) {
+  const abs = Math.abs(val);
+  if (abs >= crit) return "var(--danger)";
+  if (abs >= warn) return "var(--warn)";
+  return "";
+}
+
+function updateMotor(obj) {
+  const id = obj.id;
+  if (id < 1 || id > 4) return;
+  const el = s => document.getElementById("m" + id + "-" + s);
+
+  // SPD — negate for M2 and M4 (reversed polarity)
+  const spdEl = el("spd");
+  if (spdEl) spdEl.textContent = (id === 2 || id === 4) ? -obj.spd : obj.spd;
+
+  // TOR — convert raw to N·m, yellow at rated torque, red at stall torque
+  // negate for M2 and M4 (reversed polarity)
+  const torEl = el("tor");
+  if (torEl) {
+    let nm = obj.tor * TOR_TO_NM;
+    if (id === 2 || id === 4) nm = -nm;
+    torEl.textContent = nm.toFixed(2) + "Nm";
+    torEl.style.color = colorFor(Math.abs(nm), THRESHOLDS.tor.warn, THRESHOLDS.tor.crit);
+  }
+
+  // TMP — yellow at 60C, red at 75C
+  const tmpEl = el("tmp");
+  if (tmpEl) {
+    tmpEl.textContent = obj.temp + "C";
+    tmpEl.style.color = colorFor(obj.temp, THRESHOLDS.tmp.warn, THRESHOLDS.tmp.crit);
+  }
+
+  // ERR — any non-zero is red; log new faults once
+  const errEl = el("err");
+  if (errEl) {
+    errEl.textContent = obj.err;
+    errEl.style.color = obj.err ? "var(--danger)" : "";
+    if (obj.err && String(obj.err) !== errEl.dataset.last) {
+      log(`M${id} ERR=0x${obj.err.toString(16).toUpperCase().padStart(2,"0")}`, "error");
+    }
+    errEl.dataset.last = String(obj.err);
+  }
+
+  // Card border reflects worst condition
+  const card = document.getElementById("mc" + id);
+  if (card) {
+    const isCrit = Math.abs(obj.tor) >= THRESHOLDS.tor.crit || obj.temp >= THRESHOLDS.tmp.crit || obj.err;
+    const isWarn = !isCrit && (Math.abs(obj.tor) >= THRESHOLDS.tor.warn || obj.temp >= THRESHOLDS.tmp.warn);
+    card.style.borderColor = isCrit ? "var(--danger)" : isWarn ? "var(--warn)" : "";
+  }
+}
+
+// ─── Log ──────────────────────────────────────────────────────────────────────
+const MAX_LOG = 80;
+function log(msg, type) {
+  const logEl = document.getElementById("log");
+  const line  = document.createElement("div");
+  const now   = new Date();
+  const ts    = now.toTimeString().slice(0,8);
+  line.className = "log-line" + (type ? " " + type : "");
+  line.textContent = ts + "  " + msg;
+  logEl.appendChild(line);
+  while (logEl.children.length > MAX_LOG) logEl.removeChild(logEl.firstChild);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+log("Ready. Enter WebSocket URL and connect.", "info");
+log("Gears: " + GEARS.map((g,i) => `G${i+1}=${g}`).join("  "));
+
+document.getElementById("ws-input").addEventListener("change", saveSettings);
+
+loadSettings();
+</script>
+</body>
+</html>
