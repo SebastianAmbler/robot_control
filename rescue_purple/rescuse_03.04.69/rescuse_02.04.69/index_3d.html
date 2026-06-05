@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>3D Robot - WebSocket Bridge</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        #ui { display: none; }
+        #wsStatus { font-family: monospace; font-size: 12px; padding: 5px 10px; border-radius: 4px; border: 1px solid #333; background: #111; margin-bottom: 6px; }
+        #wsStatus.connected { color: #0f0; border-color: #0f0; }
+        #wsStatus.error     { color: #f55; border-color: #f55; }
+        #wsStatus.retry     { color: #fa0; border-color: #fa0; }
+        .val-box { background: #111; padding: 6px 10px; font-family: monospace; border: 1px solid #333; margin-bottom: 8px; font-size: 11px; }
+        .divider { border-top: 1px solid #0a4a0a; margin: 9px 0; }
+        #debugLog { background: #050505; border: 1px solid #1a3a1a; font-family: monospace; font-size: 10px; color: rgb(255, 177, 68); padding: 5px 8px; max-height: 60px; overflow-y: auto; margin-bottom: 8px; border-radius: 4px; }
+        #debugLog .err  { color: #f55; }
+        #debugLog .ok   { color: #4f4; }
+        #debugLog .info { color: #fa0; }
+        .servo-row { display: flex; align-items: center; margin-bottom: 5px; font-family: monospace; font-size: 11px; gap: 6px; }
+        .servo-label { width: 80px; flex-shrink: 0; color: #888; }
+        .servo-bar-wrap { flex: 1; height: 8px; background: #1a1a1a; border-radius: 4px; overflow: hidden; position: relative; }
+        .servo-bar-wrap::after { content: ''; position: absolute; left: 50%; top: 0; width: 1px; height: 100%; background: #444; }
+        .servo-bar { height: 100%; background: #0f0; border-radius: 4px; transition: width 0.04s linear; }
+        .servo-bar.arm  { background: #0cf; }
+        .servo-bar.flip { background: #fa0; }
+        .servo-bar.active-bar { background: #ff0 !important; }
+        .servo-deg { width: 50px; text-align: right; font-weight: bold; color: #0f0; }
+        .servo-deg.arm  { color: #0cf; }
+        .servo-deg.flip { color: #fa0; }
+        .active-row .servo-label { color: #ff0 !important; font-weight: bold; }
+        #wsConfig { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+        #wsConfig input  { background: #111; border: 1px solid #333; color: #0f0; font-family: monospace; font-size: 11px; padding: 3px 6px; border-radius: 3px; width: 180px; }
+        #wsConfig button { background: #0f0; color: #000; border: none; padding: 3px 10px; border-radius: 3px; cursor: pointer; font-weight: bold; font-size: 11px; }
+    </style>
+</head>
+<body>
+<div id="ui">
+    <h3 style="color:#0cf;margin:0 0 8px;font-size:13px;">&#x1F916; Rescue Robot 3D</h3>
+    <div id="wsConfig">
+        <span style="font-size:11px;color:#888;">ws://</span>
+        <input id="wsAddr" value="localhost:8765" />
+        <button id="btnConnect">&#8634;</button>
+    </div>
+    <div id="wsStatus" class="retry">WebSocket: กำลังเชื่อมต่อ…</div>
+    <div class="val-box">
+        ROLL: <span id="vX">0.0</span>°&nbsp;&nbsp;
+        PITCH: <span id="vY">0.0</span>°&nbsp;&nbsp;
+        YAW: <span id="vZ">0.0</span>°
+    </div>
+    <div id="debugLog"><div class="info">[ รอ WebSocket… ]</div></div>
+    <div class="divider"></div>
+    <div style="font-size:11px;color:rgb(255,149,0);margin-bottom:6px;">
+        <b>SERVO ANGLES</b>&nbsp;
+        <span style="color:#444;">0°——[90°]——180°</span>&nbsp;
+        <span id="activeLabel" style="color:rgb(255,153,0);font-weight:bold;"></span>
+    </div>
+    <!-- sv[0] J1 Shoulder -->
+    <div class="servo-row" id="row-shoulder">
+        <span class="servo-label">J1 Shoulder</span>
+        <div class="servo-bar-wrap"><div class="servo-bar arm" id="bar-shoulder"></div></div>
+        <span class="servo-deg arm" id="deg-shoulder">60°</span>
+    </div>
+    <!-- sv[1] J2 Elbow -->
+    <div class="servo-row" id="row-elbow">
+        <span class="servo-label">J2 Elbow</span>
+        <div class="servo-bar-wrap"><div class="servo-bar arm" id="bar-elbow"></div></div>
+        <span class="servo-deg arm" id="deg-elbow">130°</span>
+    </div>
+    <!-- sv[2] J3 Extend -->
+    <div class="servo-row" id="row-extend">
+        <span class="servo-label">J3 Extend</span>
+        <div class="servo-bar-wrap"><div class="servo-bar arm" id="bar-extend"></div></div>
+        <span class="servo-deg arm" id="deg-extend">0°</span>
+    </div>
+    <!-- sv[3] J4 Wrist -->
+    <div class="servo-row" id="row-wrist">
+        <span class="servo-label">J4 Wrist</span>
+        <div class="servo-bar-wrap"><div class="servo-bar arm" id="bar-wrist"></div></div>
+        <span class="servo-deg arm" id="deg-wrist">90°</span>
+    </div>
+    <!-- sv[4] J5 Tool -->
+    <div class="servo-row" id="row-tool">
+        <span class="servo-label">J5 Tool</span>
+        <div class="servo-bar-wrap"><div class="servo-bar arm" id="bar-tool"></div></div>
+        <span class="servo-deg arm" id="deg-tool">90°</span>
+    </div>
+    <!-- sv[5] J6 Gripper -->
+    <div class="servo-row" id="row-gripper">
+        <span class="servo-label">J6 Gripper</span>
+        <div class="servo-bar-wrap"><div class="servo-bar arm" id="bar-gripper"></div></div>
+        <span class="servo-deg arm" id="deg-gripper">70°</span>
+    </div>
+    <!-- sv[6] Flip-F -->
+    <div class="servo-row" id="row-flipF">
+        <span class="servo-label">Flip-F</span>
+        <div class="servo-bar-wrap"><div class="servo-bar flip" id="bar-flipF"></div></div>
+        <span class="servo-deg flip" id="deg-flipF">100°</span>
+    </div>
+    <!-- sv[7] Flip-R -->
+    <div class="servo-row" id="row-flipR">
+        <span class="servo-label">Flip-R</span>
+        <div class="servo-bar-wrap"><div class="servo-bar flip" id="bar-flipR"></div></div>
+        <span class="servo-deg flip" id="deg-flipR">100°</span>
+    </div>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { STLLoader }     from 'three/addons/loaders/STLLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const logEl = document.getElementById('debugLog');
+function dbg(msg, cls='ok') {
+    const d = document.createElement('div');
+    d.className = cls;
+    d.innerText = `[${new Date().toLocaleTimeString('th',{hour12:false})}] ${msg}`;
+    logEl.appendChild(d);
+    while (logEl.children.length > 20) logEl.removeChild(logEl.firstChild);
+    logEl.scrollTop = logEl.scrollHeight;
+}
+
+// ── INDEX MAP — ตรงกับ rescue_win.py sv[] ──────────────
+// sv[0]=J1 Shoulder  sv[1]=J2 Elbow    sv[2]=J3 Extend
+// sv[3]=J4 Wrist     sv[4]=J5 Tool     sv[5]=J6 Gripper
+// sv[6]=Flip-F       sv[7]=Flip-R
+const IDX_TO_KEY = [
+    'shoulder',  // sv[0] J1 Shoulder
+    'elbow',     // sv[1] J2 Elbow
+    'extend',    // sv[2] J3 Extend
+    'wrist',     // sv[3] J4 Wrist
+    'tool',      // sv[4] J5 Tool
+    'gripper',   // sv[5] J6 Gripper
+    'flipF',     // sv[6] Flip-F
+    'flipR',     // sv[7] Flip-R
+];
+
+// ── SERVO STATE — ค่า default ตรงกับ homeRaw[] ──────────
+const servo = {
+    shoulder: { cur: 60,  tgt: 60  },
+    elbow:    { cur: 130, tgt: 130 },
+    extend:   { cur: 0,   tgt: 0   },
+    wrist:    { cur: 90,  tgt: 90  },
+    tool:     { cur: 90,  tgt: 90  },
+    gripper:  { cur: 70,  tgt: 70  },
+    flipF:    { cur: 100, tgt: 100 },
+    flipR:    { cur: 100, tgt: 100 },
+};
+
+const SERVO_MIN = 0, SERVO_MAX = 180;
+let activeKey = '';
+
+function setServoUI(key, deg, active) {
+    const pct = ((deg - SERVO_MIN) / (SERVO_MAX - SERVO_MIN)) * 100;
+    const bar = document.getElementById(`bar-${key}`);
+    const txt = document.getElementById(`deg-${key}`);
+    const row = document.getElementById(`row-${key}`);
+    if (bar) { bar.style.width = pct.toFixed(1)+'%'; bar.classList.toggle('active-bar', active); }
+    if (txt) txt.innerText = deg.toFixed(0) + '°';
+    if (row) row.classList.toggle('active-row', active);
+}
+
+function updateAllUI() {
+    Object.keys(servo).forEach(k => setServoUI(k, servo[k].cur, k === activeKey));
+    document.getElementById('activeLabel').innerText = activeKey ? `► ${activeKey.toUpperCase()}` : '';
+}
+
+// ── CALIBRATION ─────────────────────────────────────────
+// n     = ค่า servo ที่ให้ joint อยู่ที่ neutral (0 rad)
+// dir   =  1 หมุนตามเข็ม / -1 หมุนทวนเข็ม
+// scale = ขนาดการหมุน (ปรับถ้าหมุนมากหรือน้อยไป)
+const CAL = {
+    shoulder: { n: 60,  dir:  1, scale: 1.0 },
+    elbow:    { n: 130, dir: -1, scale: 1.0 },
+    extend:   { n: 0,   dir:  1, scale: 1.0 },
+    wrist:    { n: 90,  dir:  1, scale: 1.0 },
+    tool:     { n: 90,  dir:  1, scale: 1.0 },
+    gripper:  { n: 70,  dir:  1, scale: 0.5 },
+    flipF:    { n: 100, dir:  -1, scale: 0.95 },
+    flipR:    { n: 100, dir:  -1, scale: 0.85 },
+};
+
+function servoToRad(deg, key) {
+    const c = CAL[key] ?? { n:90, dir:1, scale:1 };
+    return c.dir * c.scale * THREE.MathUtils.degToRad(deg - c.n);
+}
+
+// ── THREE.JS SCENE ───────────────────────────────────────
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x111111);
+const camera = new THREE.OrthographicCamera(
+    innerWidth/-2, innerWidth/2,
+    innerHeight/2, innerHeight/-2, 1, 5000);
+camera.position.set(1500,1000,600);
+camera.lookAt(0,30,0);
+camera.zoom = 0.9;
+camera.updateProjectionMatrix();
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(devicePixelRatio);
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.GridHelper(1000,20,0x444444,0x222222));
+scene.add(new THREE.AmbientLight(0xffffff,0.8));
+const dl = new THREE.DirectionalLight(0xffffff,1);
+dl.position.set(200,500,200); scene.add(dl);
+
+const robotGroup = new THREE.Group();
+robotGroup.rotation.x = -Math.PI/2;
+robotGroup.scale.x = -1;   // ← mirror แขนกลให้ถูกด้าน
+scene.add(robotGroup);
+
+const frontLegs=[], backLegs=[];
+let arm1Joint=null, arm2Joint=null, arm3Joint=null;
+const loader = new STLLoader();
+
+function addLeg(geo,x,y,z,mirror,type,preRot={}) {
+    const g=geo.clone(); g.computeBoundingBox(); const b=g.boundingBox;
+    g.translate(-(b.max.x+b.min.x)/2,-b.max.y,-(b.max.z+b.min.z)/2);
+    const mesh=new THREE.Mesh(g,new THREE.MeshPhongMaterial({color:0x79099C,shininess:80}));
+    if(mirror) mesh.scale.x=-1;
+    if(preRot.x!==undefined) mesh.rotation.x=preRot.x;
+    if(preRot.z!==undefined) mesh.rotation.z=preRot.z;
+    const joint=new THREE.Group();
+    joint.position.set(x,y,z); joint.add(mesh);
+    robotGroup.add(joint);
+    (type==='front'?frontLegs:backLegs).push(joint);
+    dbg(`${type} leg loaded`,'ok');
+}
+
+function createArm1Joint(geo) {
+    const g=geo.clone(); g.computeBoundingBox(); const b=g.boundingBox;
+    const px=b.min.x+20, py=b.min.y+10, pz=(b.max.z+b.min.z)/10;
+    g.translate(-px,-py,-pz);
+    const joint=new THREE.Group();
+    // ย้ายแขนกลไปที่ตำแหน่ง front flipper (z=20 เหมือน frontLegs)
+    joint.position.set(0, 10, 20);
+    joint.rotation.z=0;   // ไม่ต้องกลับหัว
+    const m=new THREE.Mesh(g,new THREE.MeshPhongMaterial({color:0xa35de5,shininess:80}));
+    joint.add(m);
+    const tip=new THREE.Object3D(); tip.position.set(0,60,40);
+    joint.add(tip); window.arm1Tip=tip;
+    robotGroup.add(joint); arm1Joint=joint;
+    dbg('arm1 joint ✓','ok');
+}
+
+function createArm2Joint(geo) {
+    const g=geo.clone(); g.computeBoundingBox(); const b=g.boundingBox;
+    g.translate(-(b.max.x+b.min.x)/2,-b.min.y,-(b.max.z+b.min.z)/2);
+    const joint=new THREE.Group();
+    joint.add(new THREE.Mesh(g,new THREE.MeshPhongMaterial({color:0xa35de5,shininess:80})));
+    const tip=new THREE.Object3D(); tip.position.set(0,0,0);
+    joint.add(tip); window.arm2Tip=tip;
+    const wait=()=>{ if(!window.arm1Tip) return setTimeout(wait,50);
+        joint.position.set(0,0,0); window.arm1Tip.add(joint); arm2Joint=joint;
+        dbg('arm2 joint ✓','ok'); };
+    wait();
+}
+
+function createArm3Joint(geo) {
+    const g=geo.clone(); g.computeBoundingBox(); const b=g.boundingBox;
+    g.translate(-(b.max.x+b.min.x)/2,-b.min.y,-(b.max.z+b.min.z)/2);
+    const joint=new THREE.Group();
+    joint.add(new THREE.Mesh(g,new THREE.MeshPhongMaterial({color:0xa35de5,shininess:80})));
+    const tip=new THREE.Object3D(); tip.position.set(0,20,0);
+    joint.add(tip); window.arm3Tip=tip;
+    const wait=()=>{ if(!window.arm2Tip) return setTimeout(wait,50);
+        joint.position.set(0,0,0); window.arm2Tip.add(joint); arm3Joint=joint;
+        dbg('arm3 joint ✓','ok'); };
+    wait();
+}
+
+function addToArm3(geo,mat) {
+    const wait=()=>{ if(!window.arm3Tip) return setTimeout(wait,50);
+        const g=geo.clone(); g.computeBoundingBox(); const b=g.boundingBox;
+        g.translate(-(b.max.x+b.min.x)/2,-b.min.y,-(b.max.z+b.min.z)/2);
+        const m=new THREE.Mesh(g,mat); m.position.set(0,0,0);
+        window.arm3Tip.add(m); };
+    wait();
+}
+
+loader.load('./models/STLFORSIM.Arm1.stl',  geo=>createArm1Joint(geo));
+loader.load('./models/STLFORSIM.Arm2.stl',  geo=>createArm2Joint(geo));
+loader.load('./models/STLFORSIM.Arm3.stl',  geo=>createArm3Joint(geo));
+const gripMat=new THREE.MeshPhongMaterial({color:0xFFFF00,shininess:100});
+['STLFORSIM.Gripper1.stl','STLFORSIM.Gripper2.stl'].forEach(f=>
+    loader.load(`./models/${f}`, geo=>addToArm3(geo,gripMat)));
+loader.load('./models/leg2.stl', geo=>{
+    addLeg(geo, 35,15,20,false,'front',{z:-Math.PI});
+    addLeg(geo,-35,15,20,true, 'front',{z:-Math.PI});
+});
+loader.load('./models/leg4.stl', geo=>{
+    addLeg(geo, 35,-20,20,false,'back',{});
+    addLeg(geo,-35,-20,20,true, 'back',{});
+});
+
+// ── WEBSOCKET ────────────────────────────────────────────
+const statusEl=document.getElementById('wsStatus');
+let ws=null, retryTimer=null, retryDelay=1000;
+
+function applyAngles(angles, selected) {
+    angles.forEach((val,i)=>{
+        const key=IDX_TO_KEY[i];
+        if(key && servo[key]!==undefined) servo[key].tgt=val;
+    });
+    if(typeof selected==='number') activeKey=IDX_TO_KEY[selected]??'';
+}
+
+function connectWS() {
+    const host=document.getElementById('wsAddr').value.trim()||'localhost:8765';
+    const url=`ws://${host}`;
+    statusEl.textContent=`WebSocket: เชื่อมต่อ ${url}…`;
+    statusEl.className='retry';
+    dbg(`connecting → ${url}`,'info');
+    ws=new WebSocket(url);
+    ws.onopen=()=>{ retryDelay=1000; statusEl.textContent=`✓ ${url}`; statusEl.className='connected'; dbg('connected ✓','ok'); };
+    ws.onmessage=evt=>{
+        try {
+            const msg=JSON.parse(evt.data);
+            if(msg.type==='state' && Array.isArray(msg.angles)) {
+                applyAngles(msg.angles, msg.selected);
+                if(msg.imu) applyIMU(msg.imu.roll,msg.imu.pitch,msg.imu.yaw);
+            }
+            if(msg.type==='imu') applyIMU(msg.roll,msg.pitch,msg.yaw);
+        } catch(e){ dbg('msg err: '+e.message,'err'); }
+    };
+    ws.onerror=()=>{ statusEl.className='error'; };
+    ws.onclose=()=>{
+        ws=null;
+        statusEl.textContent=`หลุด (retry ${(retryDelay/1000).toFixed(1)}s…)`;
+        statusEl.className='retry';
+        clearTimeout(retryTimer);
+        retryTimer=setTimeout(()=>{ retryDelay=Math.min(10000,retryDelay*1.5); connectWS(); },retryDelay);
+    };
+}
+
+document.getElementById('btnConnect').onclick=()=>{
+    clearTimeout(retryTimer); retryDelay=1000;
+    if(ws){ ws.onclose=null; ws.close(); ws=null; }
+    connectWS();
+};
+
+function applyIMU(roll,pitch,yaw) {
+    document.getElementById('vX').innerText=(+roll).toFixed(1);
+    document.getElementById('vY').innerText=(+pitch).toFixed(1);
+    document.getElementById('vZ').innerText=(+yaw).toFixed(1);
+    robotGroup.quaternion.setFromEuler(new THREE.Euler(
+        -Math.PI/2+THREE.MathUtils.degToRad(roll),
+        THREE.MathUtils.degToRad(-pitch),
+        THREE.MathUtils.degToRad(yaw),'XYZ'));
+}
+
+// ── APPLY SERVO → 3D JOINTS ──────────────────────────────
+const LERP=0.12;
+function applyServo() {
+    Object.values(servo).forEach(s=>{ s.cur+=(s.tgt-s.cur)*LERP; });
+
+    // ── Flipper legs ─────────────────────────────────────
+    frontLegs.forEach(j=>{ j.rotation.x=servoToRad(servo.flipF.cur,'flipF'); });
+    backLegs.forEach(j =>{ j.rotation.x=servoToRad(servo.flipR.cur,'flipR'); });
+
+    // ── Arm joints ───────────────────────────────────────
+    // arm1Joint ← J1 Shoulder (sv[0])
+    if(arm1Joint) arm1Joint.rotation.x=servoToRad(servo.shoulder.cur,'shoulder');
+    // arm2Joint ← J2 Elbow (sv[1])
+    if(arm2Joint) arm2Joint.rotation.x=servoToRad(servo.elbow.cur,'elbow');
+    // arm3Joint ← J4 Wrist (sv[3])
+    if(arm3Joint) arm3Joint.rotation.x=servoToRad(servo.wrist.cur,'wrist');
+
+    updateAllUI();
+}
+
+// ── RENDER LOOP ──────────────────────────────────────────
+(function animate(){
+    requestAnimationFrame(animate);
+    applyServo();
+    renderer.render(scene,camera);
+})();
+
+window.addEventListener('resize',()=>{
+    camera.left=innerWidth/-2; camera.right=innerWidth/2;
+    camera.top=innerHeight/2; camera.bottom=innerHeight/-2;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth,innerHeight);
+});
+
+// ── รับ postMessage จาก parent iframe (control.html) ─────
+window.addEventListener('message',evt=>{
+    const msg=evt.data;
+    if(!msg || msg.type!=='state' || !Array.isArray(msg.angles)) return;
+    applyAngles(msg.angles, msg.selected);
+});
+
+// ซ่อน UI ถ้าอยู่ใน iframe
+if(window.self!==window.top) {
+    document.getElementById('ui').style.display='none';
+} else {
+    document.getElementById('ui').style.display='block';
+}
+
+updateAllUI();
+connectWS();
+</script>
+</body>
+</html>

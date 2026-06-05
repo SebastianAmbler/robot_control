@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>RescueBot — Control v3</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+    <div id="shell">
+
+        <!-- ═══════════════ HEADER ═══════════════ -->
+        <div id="header">
+            <div id="logo">
+                <span class="logo-rescue">RESCUE</span><span class="logo-bot">BOT</span>
+                <span class="logo-sep"></span>
+            </div>
+            <div style="display:flex;gap:5px;align-items:center;">
+                <span style="font-size:10px;color:var(--text-dim);font-family:var(--head);">WS://</span>
+                <input id="wsAddr" value="localhost:8765" />
+                <button id="btnConnect">↺ CONNECT</button>
+            </div>
+            <div id="wsStatus" class="retry">DISCONNECTED</div>
+            <span style="font-size:10px;color:var(--text-dim);display:flex;align-items:center;gap:4px;">
+                <span class="hb-dot" id="hbDot"></span>
+                <span style="font-family:var(--head);font-size:10px;letter-spacing:1px;">HB</span>
+            </span>
+            <div id="modeBadge" class="mode-badge udp">UDP ONLY</div>
+            <div id="pingDisplay" class="good">PING: --</div>
+            <div class="header-spacer"></div>
+            <div style="font-size:11px;color:var(--text-dim);font-family:var(--head);">
+                PI: <span style="color:var(--accent)" id="piAddr">192.168.1.138</span>
+            </div>
+            <div style="font-size:11px;color:var(--text-dim);font-family:var(--head);display:flex;align-items:center;gap:4px;">
+                QR: <input id="flaskAddr" value="127.0.0.1:5000" style="width:110px;font-size:10px;" title="Flask QR Server IP:Port" />
+            </div>
+            <div id="victimCount"> VICTIM: 0</div>
+            <div id="tab-bar">
+                <button class="tab-btn active" id="tab-control" onclick="switchTab('control')"><span class="tab-icon"></span>CONTROL</button>
+                <button class="tab-btn" id="tab-settings" onclick="switchTab('settings')"><span class="tab-icon">⚙️</span>SETTINGS</button>
+            </div>
+        </div>
+
+        <!-- ═══════════════ SETTINGS OVERLAY ═══════════════ -->
+        <div id="settings-overlay">
+            <div class="settings-kb-cols">
+                <div class="settings-section">
+                    <div class="settings-section-title"><span class="s-dot"></span> MOVEMENT</div>
+                    <div class="settings-section-body">
+                        <div class="kb-grid" id="kb-move-grid"></div>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-section-title"><span class="s-dot" style="background:var(--amber)"></span>料 ARM / SERVO</div>
+                    <div class="settings-section-body">
+                        <div class="kb-grid" id="kb-servo-grid"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="settings-kb-cols">
+                <div class="settings-section">
+                    <div class="settings-section-title"><span class="s-dot" style="background:var(--ok)"></span>露 POSTURES</div>
+                    <div class="settings-section-body">
+                        <div class="kb-grid" id="kb-posture-grid"></div>
+                        <div class="posture-cfg-divider"></div>
+                        <div class="posture-cfg-header">CUSTOM POSTURE NAMES</div>
+                        <div class="posture-cfg-desc">ตั้งชื่อและ key สำหรับ posture slot ว่าง</div>
+                        <div class="posture-cfg-grid" id="posture-cfg-grid"></div>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-section-title"><span class="s-dot" style="background:var(--text-dim)"></span>⚡ MISC</div>
+                    <div class="settings-section-body">
+                        <div class="kb-grid" id="kb-misc-grid"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="settings-actions">
+                <button class="s-btn s-btn-reset" onclick="resetKeybinds()">↺ RESET DEFAULT</button>
+                <button class="s-btn s-btn-save" onclick="saveKeybinds()">✓ SAVE &amp; APPLY</button>
+            </div>
+            <div class="settings-section">
+                <div class="settings-section-title"><span class="s-dot" style="background:var(--ok)"></span>⚡ HYBRID / IK SETTINGS</div>
+                <div class="settings-section-body">
+                    <div class="ik-section-head">ARM LINK LENGTHS (mm)</div>
+                    <div class="ik-cfg-row3">
+                        <div class="ik-cfg-box">
+                            <div class="ik-cfg-label">L1 — Shoulder→Elbow</div>
+                            <div style="display:flex;align-items:center;gap:5px;"><input class="ik-cfg-input" id="cfg-L1" type="number" min="10" max="500" value="120"><span class="ik-cfg-unit">mm</span></div>
+                            <input type="range" id="cfg-L1-range" min="10" max="400" value="120" oninput="syncCfgRange('L1')">
+                        </div>
+                        <div class="ik-cfg-box">
+                            <div class="ik-cfg-label">L2 — Elbow→Wrist</div>
+                            <div style="display:flex;align-items:center;gap:5px;"><input class="ik-cfg-input" id="cfg-L2" type="number" min="10" max="500" value="100"><span class="ik-cfg-unit">mm</span></div>
+                            <input type="range" id="cfg-L2-range" min="10" max="400" value="100" oninput="syncCfgRange('L2')">
+                        </div>
+                        <div class="ik-cfg-box">
+                            <div class="ik-cfg-label">L3 — Wrist→Tip</div>
+                            <div style="display:flex;align-items:center;gap:5px;"><input class="ik-cfg-input" id="cfg-L3" type="number" min="0" max="300" value="80"><span class="ik-cfg-unit">mm</span></div>
+                            <input type="range" id="cfg-L3-range" min="0" max="300" value="80" oninput="syncCfgRange('L3')">
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:14px;">
+                        <span style="font-size:10px;color:var(--text-dim);font-family:var(--head);letter-spacing:1px;">MAX REACH</span>
+                        <span id="reach-display" style="font-family:var(--head);font-size:13px;color:var(--ok);font-weight:700;">300 mm</span>
+                        <span style="font-size:10px;color:var(--text-dim);font-family:var(--head);letter-spacing:1px;margin-left:12px;">MIN REACH</span>
+                        <span id="reach-min-display" style="font-family:var(--head);font-size:13px;color:var(--warn);font-weight:700;">20 mm</span>
+                        <div style="flex:1;height:6px;background:var(--border);border-radius:10px;margin-left:8px;overflow:hidden;">
+                            <div id="reach-bar" style="height:100%;background:linear-gradient(to right,var(--warn),var(--ok));border-radius:10px;width:75%;transition:width 0.3s;"></div>
+                        </div>
+                    </div>
+                    <div class="ik-section-head">SERVO NEUTRAL OFFSETS (°)</div>
+                    <div class="ik-cfg-row3" style="margin-bottom:14px;">
+                        <div class="ik-cfg-box">
+                            <div class="ik-cfg-label">Shoulder offset</div>
+                            <div style="display:flex;align-items:center;gap:5px;"><input class="ik-cfg-input" id="cfg-S_OFFSET" type="number" min="0" max="180" value="90"><span class="ik-cfg-unit">°</span></div>
+                        </div>
+                        <div class="ik-cfg-box">
+                            <div class="ik-cfg-label">Elbow offset</div>
+                            <div style="display:flex;align-items:center;gap:5px;"><input class="ik-cfg-input" id="cfg-E_OFFSET" type="number" min="0" max="180" value="90"><span class="ik-cfg-unit">°</span></div>
+                        </div>
+                        <div class="ik-cfg-box">
+                            <div class="ik-cfg-label">Wrist offset</div>
+                            <div style="display:flex;align-items:center;gap:5px;"><input class="ik-cfg-input" id="cfg-W_OFFSET" type="number" min="0" max="180" value="90"><span class="ik-cfg-unit">°</span></div>
+                        </div>
+                    </div>
+                    <div class="ik-section-head">JOINT ASSIGNMENT — HYBRID MODE</div>
+                    <div style="font-size:10px;color:var(--text-dim);font-family:var(--mono);margin-bottom:8px;">กำหนดว่าแต่ละ joint ใช้ IK หรือ Direct ใน Hybrid mode</div>
+                    <div id="joint-assign-grid" style="display:flex;flex-direction:column;gap:4px;margin-bottom:14px;"></div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+                        <div>
+                            <div class="ik-section-head" style="margin-bottom:6px;">IK SOLUTION</div>
+                            <div style="display:flex;gap:5px;">
+                                <div class="ik-sol-btn active" id="sol-elbow-up" onclick="setIKSolution('up')">▲ ELBOW UP</div>
+                                <div class="ik-sol-btn" id="sol-elbow-down" onclick="setIKSolution('down')">▼ ELBOW DOWN</div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="ik-section-head" style="margin-bottom:6px;">DEFAULT STEP (mm)</div>
+                            <div style="display:flex;gap:5px;">
+                                <div class="ik-sol-btn" id="defstep-2" onclick="setDefaultCartStep(2,this)">2</div>
+                                <div class="ik-sol-btn" id="defstep-5" onclick="setDefaultCartStep(5,this)">5</div>
+                                <div class="ik-sol-btn active" id="defstep-10" onclick="setDefaultCartStep(10,this)">10</div>
+                                <div class="ik-sol-btn" id="defstep-20" onclick="setDefaultCartStep(20,this)">20</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ik-toggle-row">
+                        <div>
+                            <div style="font-family:var(--head);font-size:11px;color:var(--text-hi);font-weight:600;letter-spacing:0.5px;">Wrist auto-level</div>
+                            <div style="font-size:10px;color:var(--text-dim);font-family:var(--mono);margin-top:2px;">รักษา end-effector แนวนอนอัตโนมัติ</div>
+                        </div>
+                        <div class="ik-toggle" id="toggle-wrist-lock" onclick="toggleWristLock()" data-on="true">
+                            <div class="ik-toggle-knob"></div>
+                        </div>
+                    </div>
+                    <div class="ik-toggle-row">
+                        <div>
+                            <div style="font-family:var(--head);font-size:11px;color:var(--text-hi);font-weight:600;letter-spacing:0.5px;">Warn on out-of-reach</div>
+                            <div style="font-size:10px;color:var(--text-dim);font-family:var(--mono);margin-top:2px;">แสดง log warning เมื่อ IK ถึงไม่ได้</div>
+                        </div>
+                        <div class="ik-toggle" id="toggle-ik-warn" onclick="toggleIKWarn()" data-on="true">
+                            <div class="ik-toggle-knob"></div>
+                        </div>
+                    </div>
+                    <div class="ik-toggle-row" style="margin-bottom:14px;">
+                        <div>
+                            <div style="font-family:var(--head);font-size:11px;color:var(--text-hi);font-weight:600;letter-spacing:0.5px;">Auto-sync FK on mode switch</div>
+                            <div style="font-size:10px;color:var(--text-dim);font-family:var(--mono);margin-top:2px;">คำนวณ X,Z จาก joint angles เมื่อเปลี่ยน mode</div>
+                        </div>
+                        <div class="ik-toggle" id="toggle-auto-fk" onclick="toggleAutoFK()" data-on="true">
+                            <div class="ik-toggle-knob"></div>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:8px;justify-content:flex-end;">
+                        <button class="s-btn s-btn-reset" onclick="resetIKCfg()">↺ RESET IK</button>
+                        <button class="s-btn s-btn-save" onclick="saveIKCfg()">✓ APPLY IK</button>
+                    </div>
+                </div>
+            </div>
+            <!-- ═══ GEAR SPEED SETTINGS ═══ -->
+            <div class="settings-section">
+                <div class="settings-section-title">
+                    <span class="s-dot" style="background:var(--ok)"></span>⚡ GEAR SPEED SETTINGS
+                </div>
+                <div class="settings-section-body">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                        <div>
+                            <div class="ik-section-head" style="margin-bottom:8px;">LINEAR (m/s)</div>
+                            <div style="display:flex;flex-direction:column;gap:5px;">
+                                <div style="display:flex;align-items:center;gap:8px;"><span style="font-family:var(--head);font-size:10px;font-weight:700;color:var(--accent);min-width:24px;">G1</span><input class="ik-cfg-input" id="linG-1" type="number" min="0.01" max="3" step="0.01" value="0.05" style="width:70px;"><span class="ik-cfg-unit">m/s</span></div>
+                                <div style="display:flex;align-items:center;gap:8px;"><span style="font-family:var(--head);font-size:10px;font-weight:700;color:var(--accent);min-width:24px;">G2</span><input class="ik-cfg-input" id="linG-2" type="number" min="0.01" max="3" step="0.01" value="0.15" style="width:70px;"><span class="ik-cfg-unit">m/s</span></div>
+                                <div style="display:flex;align-items:center;gap:8px;"><span style="font-family:var(--head);font-size:10px;font-weight:700;color:var(--accent);min-width:24px;">G3</span><input class="ik-cfg-input" id="linG-3" type="number" min="0.01" max="3" step="0.01" value="0.30" style="width:70px;"><span class="ik-cfg-unit">m/s</span></div>
+                                <div style="display:flex;align-items:center;gap:8px;"><span style="font-family:var(--head);font-size:10px;font-weight:700;color:var(--amber);min-width:24px;">G4</span><input class="ik-cfg-input" id="linG-4" type="number" min="0.01" max="3" step="0.01" value="0.50" style="width:70px;"><span class="ik-cfg-unit">m/s</span></div>
+                                <div style="display:flex;align-items:center;gap:8px;"><span style="font-family:var(--head);font-size:10px;font-weight:700;color:var(--danger);min-width:24px;">G5</span><input class="ik-cfg-input" id="linG-5" type="number" min="0.01" max="3" step="0.01" value="0.80" style="width:70px;"><span class="ik-cfg-unit">m/s</span></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="ik-section-head" style="margin-bottom:8px;">ANGULAR (r/s)</div>
+                            <div style="display:flex;flex-direction:column;gap:5px;">
+                                <div style="display:flex;align-items:center;gap:8px;"><span style="font-family:var(--head);font-size:10px;font-weight:700;color:var(--accent);min-width:24px;">G1</span><input class="ik-cfg-input" id="angG-1" type="number" min="0.01" max="6" step="0.05" value="0.20" style="width:70px;"><span class="ik-cfg-unit">r/s</span></div>
+                                <div style="display:flex;align-items:center;gap:8px;"><span style="font-family:var(--head);font-size:10px;font-weight:700;color:var(--accent);min-width:24px;">G2</span><input class="ik-cfg-input" id="angG-2" type="number" min="0.01" max="6" step="0.05" value="0.50" style="width:70px;"><span class="ik-cfg-unit">r/s</span></div>
+                                <div style="display:flex;align-items:center;gap:8px;"><span style="font-family:var(--head);font-size:10px;font-weight:700;color:var(--accent);min-width:24px;">G3</span><input class="ik-cfg-input" id="angG-3" type="number" min="0.01" max="6" step="0.05" value="1.00" style="width:70px;"><span class="ik-cfg-unit">r/s</span></div>
+                                <div style="display:flex;align-items:center;gap:8px;"><span style="font-family:var(--head);font-size:10px;font-weight:700;color:var(--amber);min-width:24px;">G4</span><input class="ik-cfg-input" id="angG-4" type="number" min="0.01" max="6" step="0.05" value="1.80" style="width:70px;"><span class="ik-cfg-unit">r/s</span></div>
+                                <div style="display:flex;align-items:center;gap:8px;"><span style="font-family:var(--head);font-size:10px;font-weight:700;color:var(--danger);min-width:24px;">G5</span><input class="ik-cfg-input" id="angG-5" type="number" min="0.01" max="6" step="0.05" value="2.50" style="width:70px;"><span class="ik-cfg-unit">r/s</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+                        <button class="s-btn s-btn-reset" onclick="resetGearSpeeds()">↺ RESET</button>
+                        <button class="s-btn s-btn-save" onclick="saveGearSpeeds()">✓ APPLY</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="theme-section">
+                <div class="settings-section-title"><span class="s-dot" style="background:var(--amber)"></span> THEME</div>
+                <div class="theme-grid">
+                    <div class="theme-card active" id="theme-card-cyan" onclick="setTheme('cyan')">
+                        <div class="tc-check">✓</div>
+                        <div class="tc-bar" style="background:linear-gradient(to right,#005577,#00d4ff,#00ff88);"></div>
+                        <div class="tc-preview-area" style="background:#060810;">
+                            <div class="tc-mock">
+                                <div class="tc-mock-header" style="background:#0d1120;"><div class="tc-mock-header-dot" style="background:#00d4ff;box-shadow:0 0 5px #00d4ff;"></div><div class="tc-mock-header-line" style="background:#243555;"></div><div class="tc-mock-header-line" style="background:#00d4ff44;max-width:30%;"></div></div>
+                                <div class="tc-mock-body"><div class="tc-mock-btn" style="background:#111828;border:1px solid #243555;"><div class="tc-mock-btn-dot" style="background:#00d4ff;"></div><div class="tc-mock-btn-line" style="background:#6a88a8;"></div></div><div class="tc-mock-panel" style="background:#111828;border:1px solid #00d4ff55;"><div class="tc-mock-panel-sq" style="background:#00d4ff;"></div><div class="tc-mock-panel-bar" style="background:#00d4ff88;"></div><div class="tc-mock-panel-bar" style="background:#243555;max-width:40%;"></div></div></div>
+                                <div class="tc-mock-row" style="background:#111828;border:1px solid #1c2a42;"></div>
+                                <div class="tc-mock-row" style="background:#0d1120;border:1px solid #1c2a42;width:75%;"></div>
+                            </div>
+                        </div>
+                        <div class="tc-info" style="border-color:#1c2a42;"><div class="tc-name" style="color:#00d4ff;">Cyber Blue</div><div class="tc-desc" style="color:#3d5570;">#00d4ff · Electric cyan</div></div>
+                    </div>
+                    <div class="theme-card" id="theme-card-purple" onclick="setTheme('purple')">
+                        <div class="tc-check">✓</div>
+                        <div class="tc-bar" style="background:linear-gradient(to right,#6b21a8,#c084fc,#f0abfc);"></div>
+                        <div class="tc-preview-area" style="background:#08060f;">
+                            <div class="tc-mock">
+                                <div class="tc-mock-header" style="background:#120d20;"><div class="tc-mock-header-dot" style="background:#c084fc;box-shadow:0 0 5px #c084fc;"></div><div class="tc-mock-header-line" style="background:#3a2260;"></div><div class="tc-mock-header-line" style="background:#c084fc44;max-width:30%;"></div></div>
+                                <div class="tc-mock-body"><div class="tc-mock-btn" style="background:#1a1230;border:1px solid #3a2260;"><div class="tc-mock-btn-dot" style="background:#c084fc;"></div><div class="tc-mock-btn-line" style="background:#8b5cf6;"></div></div><div class="tc-mock-panel" style="background:#1a1230;border:1px solid #c084fc55;"><div class="tc-mock-panel-sq" style="background:#c084fc;"></div><div class="tc-mock-panel-bar" style="background:#c084fc88;"></div><div class="tc-mock-panel-bar" style="background:#3a2260;max-width:40%;"></div></div></div>
+                                <div class="tc-mock-row" style="background:#1a1230;border:1px solid #2a1a48;"></div>
+                                <div class="tc-mock-row" style="background:#120d20;border:1px solid #2a1a48;width:75%;"></div>
+                            </div>
+                        </div>
+                        <div class="tc-info" style="border-color:#2a1a48;"><div class="tc-name" style="color:#c084fc;">Neon Purple</div><div class="tc-desc" style="color:#4a306a;">#c084fc · Dark violet</div></div>
+                    </div>
+                    <div class="theme-card" id="theme-card-orange" onclick="setTheme('orange')">
+                        <div class="tc-check">✓</div>
+                        <div class="tc-bar" style="background:linear-gradient(to right,#9a3412,#fb923c,#fbbf24);"></div>
+                        <div class="tc-preview-area" style="background:#0c0800;">
+                            <div class="tc-mock">
+                                <div class="tc-mock-header" style="background:#1a1100;"><div class="tc-mock-header-dot" style="background:#fb923c;box-shadow:0 0 5px #fb923c;"></div><div class="tc-mock-header-line" style="background:#4f3500;"></div><div class="tc-mock-header-line" style="background:#fb923c44;max-width:30%;"></div></div>
+                                <div class="tc-mock-body"><div class="tc-mock-btn" style="background:#251800;border:1px solid #4f3500;"><div class="tc-mock-btn-dot" style="background:#fb923c;"></div><div class="tc-mock-btn-line" style="background:#c2700a;"></div></div><div class="tc-mock-panel" style="background:#251800;border:1px solid #fb923c55;"><div class="tc-mock-panel-sq" style="background:#fb923c;"></div><div class="tc-mock-panel-bar" style="background:#fb923c88;"></div><div class="tc-mock-panel-bar" style="background:#4f3500;max-width:40%;"></div></div></div>
+                                <div class="tc-mock-row" style="background:#251800;border:1px solid #3d2800;"></div>
+                                <div class="tc-mock-row" style="background:#1a1100;border:1px solid #3d2800;width:75%;"></div>
+                            </div>
+                        </div>
+                        <div class="tc-info" style="border-color:#3d2800;"><div class="tc-name" style="color:#fb923c;">Heat Orange</div><div class="tc-desc" style="color:#633b00;">#fb923c · Molten amber</div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════ LEFT ═══════════════ -->
+        <div class="panel" id="left">
+            <div class="panel-title"><span class="title-dot"></span>MOTOR DRIVE</div>
+            <div class="panel-body">
+                <div class="move-grid">
+                    <div class="btn" id="btn-q" data-key="q">DIAG-FL<span class="key-badge">Q</span></div>
+                    <div class="btn" id="btn-w" data-key="w">FORWARD<span class="key-badge">W</span></div>
+                    <div class="btn" id="btn-e" data-key="e">DIAG-FR<span class="key-badge">E</span></div>
+                    <div class="btn" id="btn-a" data-key="a">LEFT<span class="key-badge">A</span></div>
+                    <div class="btn btn-danger" id="btn-x" data-key="x">BRAKE<span class="key-badge">X</span></div>
+                    <div class="btn" id="btn-d" data-key="d">RIGHT<span class="key-badge">D</span></div>
+                    <div class="btn" id="btn-z" data-key="z">DIAG-BL<span class="key-badge">Z</span></div>
+                    <div class="btn" id="btn-s" data-key="s">BACK<span class="key-badge">S</span></div>
+                    <div class="btn" id="btn-c" data-key="c">DIAG-BR<span class="key-badge">C</span></div>
+                </div>
+                <div class="divider"></div>
+                <div class="speed-panel">
+                    <div class="speed-panel-header">
+                        <span class="speed-panel-header-title">⚡ SPEED CONTROL</span>
+                    </div>
+                    <div class="speed-readout-row">
+                        <div class="speed-readout-box active-lin" id="linReadout">
+                            <div class="speed-readout-label">LINEAR</div>
+                            <div class="speed-readout-val lin" id="linVal">0.15</div>
+                            <div class="speed-readout-unit">m/s</div>
+                        </div>
+                        <div class="speed-readout-box active-ang" id="angReadout">
+                            <div class="speed-readout-label">ANGULAR</div>
+                            <div class="speed-readout-val ang" id="angVal">0.50</div>
+                            <div class="speed-readout-unit">r/s</div>
+                        </div>
+                    </div>
+                    <div class="gear-block">
+                        <div class="gear-block-label">LINEAR</div>
+                        <div class="gear-track">
+                            <div class="gear-btn"          id="linG1" onclick="setLinGear(1)"><span class="gear-num">G1</span><span class="gear-spd">0.05</span></div>
+                            <div class="gear-btn active"   id="linG2" onclick="setLinGear(2)"><span class="gear-num">G2</span><span class="gear-spd">0.15</span></div>
+                            <div class="gear-btn"          id="linG3" onclick="setLinGear(3)"><span class="gear-num">G3</span><span class="gear-spd">0.30</span></div>
+                            <div class="gear-btn g-warn"   id="linG4" onclick="setLinGear(4)"><span class="gear-num">G4</span><span class="gear-spd">0.50</span></div>
+                            <div class="gear-btn g-danger" id="linG5" onclick="setLinGear(5)"><span class="gear-num">G5</span><span class="gear-spd">0.80</span></div>
+                        </div>
+                        <div class="gear-segments" id="linSegs">
+                            <div class="gear-seg" id="linSeg1"></div>
+                            <div class="gear-seg lit-2" id="linSeg2"></div>
+                            <div class="gear-seg" id="linSeg3"></div>
+                            <div class="gear-seg" id="linSeg4"></div>
+                            <div class="gear-seg" id="linSeg5"></div>
+                        </div>
+                    </div>
+                    <div class="gear-block">
+                        <div class="gear-block-label">ANGULAR</div>
+                        <div class="gear-track">
+                            <div class="gear-btn"          id="angG1" onclick="setAngGear(1)"><span class="gear-num">G1</span><span class="gear-spd">0.20</span></div>
+                            <div class="gear-btn active"   id="angG2" onclick="setAngGear(2)"><span class="gear-num">G2</span><span class="gear-spd">0.50</span></div>
+                            <div class="gear-btn"          id="angG3" onclick="setAngGear(3)"><span class="gear-num">G3</span><span class="gear-spd">1.00</span></div>
+                            <div class="gear-btn g-warn"   id="angG4" onclick="setAngGear(4)"><span class="gear-num">G4</span><span class="gear-spd">1.80</span></div>
+                            <div class="gear-btn g-danger" id="angG5" onclick="setAngGear(5)"><span class="gear-num">G5</span><span class="gear-spd">2.50</span></div>
+                        </div>
+                        <div class="gear-segments" id="angSegs">
+                            <div class="gear-seg" id="angSeg1"></div>
+                            <div class="gear-seg lit-2" id="angSeg2"></div>
+                            <div class="gear-seg" id="angSeg3"></div>
+                            <div class="gear-seg" id="angSeg4"></div>
+                            <div class="gear-seg" id="angSeg5"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="divider"></div>
+                <div class="rpm-bars">
+                    <div class="rpm-side">
+                        <div class="rpm-label">LEFT</div>
+                        <div class="rpm-bar-wrap"><div class="rpm-bar" id="rpmBarL"></div></div>
+                        <div class="rpm-val" id="rpmNumL">0</div>
+                    </div>
+                    <div class="rpm-side">
+                        <div class="rpm-label">RIGHT</div>
+                        <div class="rpm-bar-wrap"><div class="rpm-bar" id="rpmBarR"></div></div>
+                        <div class="rpm-val" id="rpmNumR">0</div>
+                    </div>
+                </div>
+                <div class="divider" style="margin:2px 0;"></div>
+                <div style="font-size:9px;display:flex;align-items:center;gap:6px;padding:1px 0;">
+                    <span style="color:var(--text-dim);font-family:var(--head);font-size:8px;letter-spacing:1px;">STATUS</span>
+                    <span id="wheelStatus" style="color:var(--text-dim);font-size:9px;">IDLE</span>
+                </div>
+            </div>
+            <div id="mini-3d-wrap" style="height:180px;">
+                <div id="mini-3d-label">烙 3D ROBOT</div>
+                <iframe src="index_3d.html" title="3D Robot" tabindex="-1"></iframe>
+            </div>
+        </div>
+
+        <!-- ═══════════════ CENTRE ═══════════════ -->
+        <div class="panel" id="centre">
+            <div id="ai-panel">
+                <div id="ai-panel-header">
+                    <span>&#128247; CAM 3 / AI SNAPSHOT</span>
+                    <button id="ai-close-btn" onclick="toggleAI()">✕ CLOSE</button>
+                </div>
+                <div style="display:flex;align-items:center;gap:5px;padding:4px 8px;background:var(--surface2);border-bottom:1px solid var(--border);flex-shrink:0;">
+                    <span style="font-family:var(--head);font-size:9px;font-weight:700;letter-spacing:2px;color:var(--accent);flex-shrink:0;">CAM 3</span>
+                    <input id="cam3Url" placeholder="http://192.168.x.x/video" spellcheck="false"
+                        style="flex:1;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:11px;padding:3px 6px;border-radius:4px;"
+                        onkeydown="if(event.key==='Enter') connectCam3()">
+                    <button onclick="connectCam3()"
+                        style="font-family:var(--head);font-size:9px;font-weight:700;letter-spacing:1px;padding:3px 10px;border:1px solid var(--accent2);border-radius:4px;background:var(--accent-d);color:#fff;cursor:pointer;">
+                        CONNECT
+                    </button>
+                    <button onclick="document.getElementById('cam3Feed').src='';document.getElementById('cam3Feed').style.display='none';document.getElementById('cam3Placeholder').style.display='flex';"
+                        style="font-family:var(--head);font-size:9px;font-weight:700;letter-spacing:1px;padding:3px 8px;border:1px solid var(--border2);border-radius:4px;background:var(--bg2);color:var(--text-dim);cursor:pointer;">
+                        ✕
+                    </button>
+                </div>
+                <div style="flex:1;position:relative;background:#030507;display:flex;align-items:center;justify-content:center;overflow:hidden;">
+                    <div id="cam3Placeholder" style="color:var(--text-dim);font-size:11px;text-align:center;font-family:var(--mono);display:flex;flex-direction:column;align-items:center;gap:6px;">
+                        <span style="font-size:32px;opacity:0.4;">&#128247;</span>
+                        ใส่ URL แล้วกด CONNECT<br>
+                        <span style="font-size:9px;color:var(--text-dim)">หรือกด P สำหรับ YOLO Snapshot</span>
+                    </div>
+                    <img id="cam3Feed" alt="CAM 3" style="display:none;max-width:100%;max-height:100%;object-fit:contain;">
+                    <img id="camFeed" alt="YOLO" style="display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:contain;">
+                    <div id="detBadge" style="position:absolute;top:8px;right:8px;background:rgba(3,5,7,0.9);border:1px solid var(--ok);padding:3px 10px;border-radius:20px;font-size:9px;color:var(--ok);display:none;backdrop-filter:blur(4px);font-family:var(--head);font-weight:700;letter-spacing:1px;">0 detections</div>
+                    <div id="camPlaceholder" style="display:none;"></div>
+                </div>
+            </div>
+
+            <!-- QR / MOTION PANEL -->
+            <div id="qr-panel">
+                <div id="qr-panel-header">
+                    <span>&#9641; QR / MOTION</span>
+                    <div style="display:flex;align-items:center;gap:6px;margin-left:auto;">
+                        <button onclick="window.open(FLASK_BASE,'_blank')"
+                            style="font-family:var(--head);font-size:9px;font-weight:700;letter-spacing:1px;padding:3px 10px;border:1px solid var(--border2);border-radius:20px;color:var(--text-dim);background:var(--bg2);cursor:pointer;transition:all 0.2s;"
+                            title="เปิดหน้าเต็มในแท็บใหม่">&#9974; FULL</button>
+                        <button id="qr-close-btn" onclick="toggleQR()">CLOSE</button>
+                    </div>
+                </div>
+                <div id="qrPlaceholder"
+                    style="flex:1;color:var(--text-dim);font-size:11px;text-align:center;font-family:var(--mono);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:20px;">
+                    <span style="font-size:36px;opacity:0.3">&#9641;</span>
+                    เลือก mode แล้วกดปุ่มด้านล่าง<br>
+                    <span style="font-size:9px;color:var(--text-dim)">Flask &#8594; 192.168.0.106:5000</span>
+                </div>
+                <iframe id="qrFlaskFrame" src=""
+                    style="flex:1;width:100%;border:none;background:#030507;display:none;min-height:0;"
+                    title="Motion Lock + QR ROI UI">
+                </iframe>
+            </div>
+
+            <div id="dual-cam">
+                <!-- CAM 1 -->
+                <div class="cam-cell" id="camCell0">
+                    <div class="cam-toolbar">
+                        <span class="cam-label">CAM 1</span>
+                        <input class="cam-input" id="camUrl0" placeholder="http://192.168.x.x/video  or  https://..." spellcheck="false">
+                        <div class="cam-mode-toggle">
+                            <div class="cam-mode-btn active" id="camModeImg0" onclick="setCamMode(0,'img')" title="MJPEG via &lt;img&gt;">IMG</div>
+                            <div class="cam-mode-btn" id="camModeFrame0" onclick="setCamMode(0,'iframe')" title="Load in iframe (for HTTPS)">FRAME</div>
+                        </div>
+                        <button class="cam-connect-btn" id="camBtn0" onclick="toggleCam(0)">CONNECT</button>
+                    </div>
+                    <div class="cam-feed-wrap" id="camWrap0">
+                        <div class="cam-placeholder" id="camPh0"><span class="icon"></span>MJPEG / HTTPS stream<br><span style="font-size:9px;color:var(--text-dim)">Use FRAME mode for https:// cameras</span></div>
+                        <img id="camImg0" alt="Camera 1">
+                        <iframe class="cam-feed-iframe" id="camFrame0" title="Camera 1 HTTPS" allowfullscreen></iframe>
+                        <div class="cam-https-badge" id="camHttpsBadge0">🔒 HTTPS</div>
+                        <div class="cam-mixed-warning" id="camMixedWarn0">
+                            <div class="warn-icon">⚠️</div>
+                            <div class="warn-title">MIXED CONTENT BLOCKED</div>
+                            <div class="warn-msg">กล้องใช้ https:// แต่เว็บรันบน http://<br>Browser บล็อก cross-protocol stream<br><br>กด FRAME เพื่อโหลดใน iframe แทน</div>
+                            <div class="warn-btn" onclick="setCamMode(0,'iframe');connectCam(0)">🔄 สลับเป็น FRAME MODE</div>
+                        </div>
+                        <div class="cam-crosshair"></div>
+                        <div class="cam-expand-btn" onclick="openFullscreen(0)" title="Fullscreen [F]">⛶</div>
+                    </div>
+                    <div class="cam-status-badge" id="camStat0">OFFLINE</div>
+                </div>
+                <div id="cam-divider"></div>
+                <!-- CAM 2 -->
+                <div class="cam-cell" id="camCell1">
+                    <div class="cam-toolbar">
+                        <span class="cam-label">CAM 2</span>
+                        <input class="cam-input" id="camUrl1" placeholder="http://192.168.x.x/video  or  https://..." spellcheck="false">
+                        <div class="cam-mode-toggle">
+                            <div class="cam-mode-btn active" id="camModeImg1" onclick="setCamMode(1,'img')" title="MJPEG via &lt;img&gt;">IMG</div>
+                            <div class="cam-mode-btn" id="camModeFrame1" onclick="setCamMode(1,'iframe')" title="Load in iframe (for HTTPS)">FRAME</div>
+                        </div>
+                        <button class="cam-connect-btn" id="camBtn1" onclick="toggleCam(1)">CONNECT</button>
+                    </div>
+                    <div class="cam-feed-wrap" id="camWrap1">
+                        <div class="cam-placeholder" id="camPh1"><span class="icon"></span>MJPEG / HTTPS stream<br><span style="font-size:9px;color:var(--text-dim)">Use FRAME mode for https:// cameras</span></div>
+                        <img id="camImg1" alt="Camera 2">
+                        <iframe class="cam-feed-iframe" id="camFrame1" title="Camera 2 HTTPS" allowfullscreen></iframe>
+                        <div class="cam-https-badge" id="camHttpsBadge1">🔒 HTTPS</div>
+                        <div class="cam-mixed-warning" id="camMixedWarn1">
+                            <div class="warn-icon">⚠️</div>
+                            <div class="warn-title">MIXED CONTENT BLOCKED</div>
+                            <div class="warn-msg">กล้องใช้ https:// แต่เว็บรันบน http://<br>Browser บล็อก cross-protocol stream<br><br>กด FRAME เพื่อโหลดใน iframe แทน</div>
+                            <div class="warn-btn" onclick="setCamMode(1,'iframe');connectCam(1)">🔄 สลับเป็น FRAME MODE</div>
+                        </div>
+                        <div class="cam-crosshair"></div>
+                        <div class="cam-expand-btn" onclick="openFullscreen(1)" title="Fullscreen [F]">⛶</div>
+                    </div>
+                    <div class="cam-status-badge" id="camStat1">OFFLINE</div>
+                </div>
+            </div>
+
+            <div id="inline-log-section">
+                <div id="inline-log-header">
+                    <span style="font-size:10px;color:var(--text-dim);font-family:var(--head);font-weight:700;letter-spacing:2px;">LOG</span>
+                    <div style="display:flex;gap:4px;margin-left:auto;">
+                        <button class="log-toggle-btn" id="btnMoveLogInline" onclick="toggleMoveLog()"><span class="ltb-dot"></span>MOVE</button>
+                        <button class="log-toggle-btn" id="btnDetectLogInline" onclick="toggleDetectLog()"><span class="ltb-dot"></span>DETECT</button>
+                        <button class="log-toggle-btn" onclick="clearSysLog()">✕ CLEAR</button>
+                    </div>
+                </div>
+                <div id="logBox"><span class="log-entry">[ waiting for connection… ]</span></div>
+            </div>
+        </div>
+
+        <!-- ═══════════════ RIGHT ═══════════════ -->
+        <div class="panel" id="right">
+            <div class="panel-title" style="margin-top:0;"><span class="title-dot" style="background:var(--amber)"></span>ARM / GRIPPER
+                <span class="panel-expand-btn" onclick="openPanelOverlay()" title="Expand [R]">⛶</span>
+            </div>
+            <div class="panel-body">
+                <div class="servo-list" id="servoList"></div>
+                <div class="divider"></div>
+                <div class="sub-title">CONTROL MODE</div>
+                <div class="ctrl-mode-bar">
+                    <div class="ctrl-mode-btn active-joint" id="modeBtn-joint" onclick="setCtrlMode('joint')">料 JOINT</div>
+                    <div class="ctrl-mode-btn" id="modeBtn-invert" onclick="setCtrlMode('invert')"> IK (XZ)</div>
+                    <div class="ctrl-mode-btn" id="modeBtn-hybrid" onclick="setCtrlMode('hybrid')">⚡ HYBRID</div>
+                </div>
+                <div id="joint-controls-wrap">
+                    <div style="display:flex;align-items:center;margin-bottom:4px;font-family:var(--head);font-size:10px;letter-spacing:1px;color:var(--text-dim);">
+                        SELECTED: <span id="selName" style="color:var(--accent);margin-left:5px;">Front</span>
+                        <span id="motorBadge" class="stop">STOP</span>
+                    </div>
+                    <div class="servo-controls">
+                        <div class="btn" id="btnDec">− [ - ]</div>
+                        <div class="btn" id="btnInc">+ [ = ]</div>
+                    </div>
+                    <div class="step-row">
+                        <span class="step-label">STEP:</span>
+                        <div class="step-btn active" id="step1" onclick="setStep(1)">1</div>
+                        <div class="step-btn" id="step2" onclick="setStep(2)">2</div>
+                        <div class="step-btn" id="step3" onclick="setStep(3)">3</div>
+                        <div class="step-btn" id="step4" onclick="setStep(4)">4</div>
+                        <div class="step-btn" id="step5" onclick="setStep(5)">5</div>
+                        <span style="font-size:10px;color:var(--text-med);margin-left:3px;font-family:var(--head);">DEG</span>
+                    </div>
+                </div>
+                <div id="cart-panel">
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:6px;">
+                        <div class="cart-val-box"><div class="cart-axis-label">Y dist</div><div class="cart-val-x" id="cartX">30.0</div></div>
+                        <div class="cart-val-box"><div class="cart-axis-label">Z height</div><div class="cart-val-z" id="cartZ">18.0</div></div>
+                        <div class="cart-val-box"><div class="cart-axis-label">Pitch °</div><div class="cart-val-x" id="cartP" style="color:var(--ok)">30.0</div></div>
+                    </div>
+                    <div class="cart-dpad">
+                        <div></div>
+                        <div class="btn" id="cartBtnZp" onmousedown="startCartHold(0,+1)" onmouseup="stopCartHold()" onmouseleave="stopCartHold()" ontouchstart="startCartHold(0,+1)" ontouchend="stopCartHold()">Z+▲<span class="key-badge">↑</span></div>
+                        <div></div>
+                        <div class="btn" id="cartBtnYm" onmousedown="startCartHold(-1,0)" onmouseup="stopCartHold()" onmouseleave="stopCartHold()" ontouchstart="startCartHold(-1,0)" ontouchend="stopCartHold()">◀Y−<span class="key-badge">←</span></div>
+                        <div class="btn btn-danger" onclick="solveFK()" style="font-size:9px;">SYNC<span class="key-badge">FK</span></div>
+                        <div class="btn" id="cartBtnYp" onmousedown="startCartHold(+1,0)" onmouseup="stopCartHold()" onmouseleave="stopCartHold()" ontouchstart="startCartHold(+1,0)" ontouchend="stopCartHold()">Y+▶<span class="key-badge">→</span></div>
+                        <div></div>
+                        <div class="btn" id="cartBtnZm" onmousedown="startCartHold(0,-1)" onmouseup="stopCartHold()" onmouseleave="stopCartHold()" ontouchstart="startCartHold(0,-1)" ontouchend="stopCartHold()">▼Z−<span class="key-badge">↓</span></div>
+                        <div></div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-top:3px;margin-bottom:6px;">
+                        <div class="btn" onmousedown="startPitchHold(-1)" onmouseup="stopPitchHold()" onmouseleave="stopPitchHold()" ontouchstart="startPitchHold(-1)" ontouchend="stopPitchHold()">P−▼<span class="key-badge">PgDn</span></div>
+                        <div class="btn" onmousedown="startPitchHold(+1)" onmouseup="stopPitchHold()" onmouseleave="stopPitchHold()" ontouchstart="startPitchHold(+1)" ontouchend="stopPitchHold()">P+▲<span class="key-badge">PgUp</span></div>
+                    </div>
+                    <div class="step-row">
+                        <span class="step-label">STEP:</span>
+                        <div class="step-btn active" id="cstep1" onclick="setCartStep(1,this)">1</div>
+                        <div class="step-btn" id="cstep2" onclick="setCartStep(2,this)">2</div>
+                        <div class="step-btn" id="cstep5" onclick="setCartStep(5,this)">5</div>
+                        <div class="step-btn" id="cstep10" onclick="setCartStep(10,this)">10</div>
+                        <span style="font-size:10px;color:var(--text-med);margin-left:3px;font-family:var(--head);">cm</span>
+                    </div>
+                </div>
+                <div class="divider"></div>
+                <div class="sub-title">GRIPPER</div>
+                <div class="motor-controls">
+                    <div class="btn" onclick="gripOpen()">🔓 OPEN<span class="key-badge">-</span></div>
+                    <div class="btn" onclick="gripClose()">🔒 CLOSE<span class="key-badge">=</span></div>
+                </div>
+                <div class="divider"></div>
+                <div class="sub-title">LASER</div>
+                <div class="motor-controls">
+                    <div class="btn" id="btnLaserOn" onclick="setLaser(true)" style="border-color:var(--border2);color:var(--text-dim);">&#x1F534; ON</div>
+                    <div class="btn" id="btnLaserOff" onclick="setLaser(false)" style="border-color:var(--accent);color:var(--accent);background:#061520;">&#x26AB; OFF</div>
+                </div>
+                <div class="divider"></div>
+                <div class="sub-title">POSTURES</div>
+                <div class="posture-grid" id="postureGrid">
+                    <div class="btn" onclick="sendPosture('home')">HOME<span class="key-badge">F1</span></div>
+                    <div class="btn" onclick="sendPosture('horizontal')">HOMEIK<span class="key-badge">F2</span></div>
+                    <div class="btn" onclick="sendPosture('guard')">GUARD<span class="key-badge">F3</span></div>
+                    <div class="btn posture-slot-set" id="posture-giraff" onclick="sendPosture('giraff')"><span class="posture-slot-name" id="pname-giraff">GIRAFF</span><span class="key-badge">F4</span></div>
+                    <div class="btn posture-slot-set" id="posture-stair" onclick="sendPosture('stair')"><span class="posture-slot-name" id="pname-stair">STAIR</span><span class="key-badge">F5</span></div>
+                    <div class="btn posture-slot-empty" id="posture-custom_1" onclick="sendPosture('custom_1')"><span class="posture-slot-name" id="pname-custom_1">CUSTOM 1</span><span class="key-badge">F6</span></div>
+                    <div class="btn posture-slot-empty" id="posture-custom_2" onclick="sendPosture('custom_2')"><span class="posture-slot-name" id="pname-custom_2">CUSTOM 2</span><span class="key-badge">F7</span></div>
+                    <div class="btn posture-slot-empty" id="posture-custom_3" onclick="sendPosture('custom_3')"><span class="posture-slot-name" id="pname-custom_3">CUSTOM 3</span><span class="key-badge">F8</span></div>
+                    <div class="btn posture-slot-empty" id="posture-custom_4" onclick="sendPosture('custom_4')"><span class="posture-slot-name" id="pname-custom_4">CUSTOM 4</span><span class="key-badge">F9</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════ FOOTER ═══════════════ -->
+        <div id="footer">
+            <button id="ai-trigger-btn" onclick="toggleAI()">AI</button>
+            <button id="qr-trigger-btn" onclick="toggleQR()">QR &#9641;</button>
+        </div>
+
+    </div><!-- #shell -->
+
+    <!-- MOVE LOG PANEL -->
+    <div id="log-panel-move" class="log-panel">
+        <div class="log-panel-header">
+            <span class="log-panel-title">⚡ MOVE &amp; CONTROL LOG</span>
+            <span class="log-panel-count" id="move-log-count">0</span>
+            <button class="log-panel-clear" onclick="clearMoveLog()">CLEAR</button>
+        </div>
+        <div class="log-panel-body" id="move-log-body"></div>
+    </div>
+
+    <!-- DETECT LOG PANEL -->
+    <div id="log-panel-detect" class="log-panel">
+        <div class="log-panel-header">
+            <span class="log-panel-title"> CAMERA &amp; DETECT LOG</span>
+            <span class="log-panel-count" id="detect-log-count">0</span>
+            <button class="log-panel-clear" onclick="clearDetectLog()">CLEAR</button>
+        </div>
+        <div class="log-panel-body" id="detect-log-body"></div>
+    </div>
+
+    <!-- FULLSCREEN OVERLAY -->
+    <div id="fullscreen-overlay">
+        <div id="fs-topbar">
+            <span id="fs-label">CAM 1 — LIVE</span>
+            <span id="fs-status">● LIVE</span>
+            <button id="fs-close-btn" onclick="closeFullscreen()">✕ CLOSE [ESC]</button>
+        </div>
+        <img id="fs-img" alt="Fullscreen camera" style="display:none;width:100%;height:100%;object-fit:contain;">
+        <iframe id="fs-frame" style="display:none;width:100%;height:100%;border:none;background:#000;" allowfullscreen title="Fullscreen IFRAME camera"></iframe>
+        <div class="cam-placeholder" id="fs-placeholder"><span class="icon" style="font-size:48px;opacity:0.3;"></span><span style="font-size:13px;">Camera not connected</span></div>
+        <div id="fs-bottombar"><span>CLICK TO CLOSE · ESC TO EXIT · F = FULLSCREEN TOGGLE</span><span style="margin-left:auto;" id="fs-res">—</span></div>
+    </div>
+
+    <!-- PANEL EXPAND OVERLAY -->
+    <div id="panel-overlay">
+        <div id="panel-overlay-topbar">
+            <span id="panel-overlay-label">⚙ ARM / GRIPPER</span>
+            <button id="panel-overlay-close" onclick="closePanelOverlay()">✕ CLOSE [ESC]</button>
+        </div>
+        <div id="panel-overlay-body"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
