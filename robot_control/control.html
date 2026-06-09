@@ -294,15 +294,30 @@
   .motor-vals {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 2px 6px;
+    grid-template-rows: auto auto;
+    gap: 2px;
+  }
+  .motor-vals .mval:nth-child(1) {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .motor-vals .mval:nth-child(2) {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .motor-vals .mval:nth-child(3) {
+    grid-column: 2;
+    grid-row: 1;
   }
   .mval {
     font-size: 11px;
     color: var(--text);
     display: flex;
-    justify-content: space-between;
+    gap: 4px;
+    min-width: 0;
   }
-  .mval span:first-child { color: var(--muted); font-size: 10px; }
+  .mval span:first-child { color: var(--muted); font-size: 10px; width: 18px; flex-shrink: 0; }
+  .mval span:last-child { min-width: 0; }
 
   /* ── Gear speeds ── */
   #gear-speeds {
@@ -341,6 +356,67 @@
     text-align: right;
   }
   .gear-row.current .gear-spd { color: var(--accent); }
+
+  /* ── Servo controls ── */
+  #servo-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .servo-row {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+  .servo-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .servo-label .servo-name { flex: 1; }
+  .servo-label .servo-angle { font-size: 11px; color: var(--text); }
+  .servo-slider {
+    width: 100%;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--surface2);
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+  .servo-slider::-webkit-slider-thumb {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .servo-slider::-moz-range-thumb {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: none;
+    transition: background 0.1s;
+  }
+  .servo-slider::-webkit-slider-thumb:hover {
+    background: var(--accent2);
+  }
+  .servo-slider::-moz-range-thumb:hover {
+    background: var(--accent2);
+  }
 
   /* ── Log ── */
   #log-section {
@@ -735,7 +811,6 @@
           <div class="mval"><span>SPD</span><span id="m1-spd">--</span></div>
           <div class="mval"><span>TOR</span><span id="m1-tor">--</span></div>
           <div class="mval"><span>TMP</span><span id="m1-tmp">--</span></div>
-          <div class="mval"><span>ERR</span><span id="m1-err">--</span></div>
         </div>
       </div>
       <div class="motor-card" id="mc2">
@@ -744,7 +819,6 @@
           <div class="mval"><span>SPD</span><span id="m2-spd">--</span></div>
           <div class="mval"><span>TOR</span><span id="m2-tor">--</span></div>
           <div class="mval"><span>TMP</span><span id="m2-tmp">--</span></div>
-          <div class="mval"><span>ERR</span><span id="m2-err">--</span></div>
         </div>
       </div>
       <div class="motor-card" id="mc3">
@@ -753,7 +827,6 @@
           <div class="mval"><span>SPD</span><span id="m3-spd">--</span></div>
           <div class="mval"><span>TOR</span><span id="m3-tor">--</span></div>
           <div class="mval"><span>TMP</span><span id="m3-tmp">--</span></div>
-          <div class="mval"><span>ERR</span><span id="m3-err">--</span></div>
         </div>
       </div>
       <div class="motor-card" id="mc4">
@@ -762,18 +835,13 @@
           <div class="mval"><span>SPD</span><span id="m4-spd">--</span></div>
           <div class="mval"><span>TOR</span><span id="m4-tor">--</span></div>
           <div class="mval"><span>TMP</span><span id="m4-tmp">--</span></div>
-          <div class="mval"><span>ERR</span><span id="m4-err">--</span></div>
         </div>
       </div>
     </div>
   </div>
   <div class="panel-section" style="flex:1;">
-    <div class="panel-label">Info</div>
-    <div class="stat-row"><span class="stat-key">Linear</span><span class="stat-val" id="info-linear">0.00</span></div>
-    <div class="stat-row"><span class="stat-key">Angular</span><span class="stat-val" id="info-angular">0.00</span></div>
-    <div class="stat-row" style="margin-top:8px;"><span class="stat-key">L RPM</span><span class="stat-val" id="info-lrpm">0</span></div>
-    <div class="stat-row"><span class="stat-key">R RPM</span><span class="stat-val" id="info-rrpm">0</span></div>
-    <div class="stat-row" style="margin-top:8px;"><span class="stat-key">Lock</span><span class="stat-val" id="info-lock">OFF</span></div>
+    <div class="panel-label">Servos</div>
+    <div id="servo-container"></div>
   </div>
 </div>
 
@@ -1455,22 +1523,12 @@ function updateMotor(obj) {
     tmpEl.style.color = colorFor(obj.temp, THRESHOLDS.tmp.warn, THRESHOLDS.tmp.crit);
   }
 
-  // ERR — any non-zero is red; log new faults once
-  const errEl = el("err");
-  if (errEl) {
-    errEl.textContent = obj.err;
-    errEl.style.color = obj.err ? "var(--danger)" : "";
-    if (obj.err && String(obj.err) !== errEl.dataset.last) {
-      log(`M${id} ERR=0x${obj.err.toString(16).toUpperCase().padStart(2,"0")}`, "error");
-    }
-    errEl.dataset.last = String(obj.err);
-  }
-
   // Card border reflects worst condition
   const card = document.getElementById("mc" + id);
   if (card) {
-    const isCrit = Math.abs(obj.tor) >= THRESHOLDS.tor.crit || obj.temp >= THRESHOLDS.tmp.crit || obj.err;
-    const isWarn = !isCrit && (Math.abs(obj.tor) >= THRESHOLDS.tor.warn || obj.temp >= THRESHOLDS.tmp.warn);
+    const torNm = Math.abs(obj.tor) * TOR_TO_NM;
+    const isCrit = torNm >= THRESHOLDS.tor.crit || obj.temp >= THRESHOLDS.tmp.crit;
+    const isWarn = !isCrit && (torNm >= THRESHOLDS.tor.warn || obj.temp >= THRESHOLDS.tmp.warn);
     card.style.borderColor = isCrit ? "var(--danger)" : isWarn ? "var(--warn)" : "";
   }
 }
