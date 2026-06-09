@@ -178,6 +178,13 @@ async def handler(websocket):
                     state = int(obj.get("state", 0))
                     pkt = struct.pack("Bb", 0xFF, state)
                     udp_sock.sendto(pkt, (PI_IP, UDP_CMD_PORT))
+                
+                elif cmd == "servo":
+                    sid   = int(obj.get("id", 1))
+                    angle = int(obj.get("angle", 90))
+                    import json as _json
+                    payload = bytes([0xAA]) + _json.dumps({"cmd":"servo","id":sid,"angle":angle}).encode()
+                    udp_sock.sendto(payload, (PI_IP, 3391))  # UDPS.py listens on 3391
 
             except Exception as e:
                 print(f"[WS] Error handling message: {e}")
