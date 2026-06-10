@@ -16,8 +16,9 @@ import struct
 import json
 import threading
 import os
+import mimetypes
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 
 # ─── Config ───────────────────────────────────────────────────────────────────
 PI_IP         = "192.168.1.101"   # <-- SET THIS to your Pi's IP address
@@ -72,21 +73,69 @@ def save_settings(settings):
 
 
 class SettingsHTTPHandler(BaseHTTPRequestHandler):
-    """HTTP handler for settings file I/O."""
-    
+    """HTTP handler: /api/settings JSON API  +  static file server for the UI."""
+
+    # Extra MIME types the standard library doesn't always know
+    _EXTRA_MIME = {
+        ".stl":  "model/stl",
+        ".js":   "application/javascript",
+        ".mjs":  "application/javascript",
+        ".wasm": "application/wasm",
+        ".map":  "application/json",
+    }
+
+    def _send_cors(self):
+        self.send_header("Access-Control-Allow-Origin", "*")
+
+    def _serve_file(self, rel_path):
+        """Serve a file from SCRIPT_DIR, resolving .. to prevent path traversal."""
+        # Decode percent-encoding and strip leading slash
+        rel_path = unquote(rel_path).lstrip("/")
+        # Normalise and guard against path traversal
+        safe = os.path.normpath(os.path.join(SCRIPT_DIR, rel_path))
+        if not safe.startswith(os.path.normpath(SCRIPT_DIR)):
+            self.send_response(403)
+            self.end_headers()
+            return
+        if not os.path.isfile(safe):
+            self.send_response(404)
+            self._send_cors()
+            self.end_headers()
+            return
+        ext = os.path.splitext(safe)[1].lower()
+        mime = self._EXTRA_MIME.get(ext) or mimetypes.guess_type(safe)[0] or "application/octet-stream"
+        try:
+            with open(safe, "rb") as fh:
+                data = fh.read()
+            self.send_response(200)
+            self.send_header("Content-Type", mime)
+            self.send_header("Content-Length", str(len(data)))
+            self._send_cors()
+            self.end_headers()
+            self.wfile.write(data)
+            print(f"[HTTP] GET {rel_path}  ({len(data)} bytes)")
+        except Exception as exc:
+            print(f"[HTTP] Error serving {safe}: {exc}")
+            self.send_response(500)
+            self.end_headers()
+
     def do_GET(self):
-        """Handle GET requests for loading settings."""
+        """API route first; fall through to static file server."""
         if self.path == "/api/settings":
             settings = load_settings()
             self.send_response(200)
             self.send_header("Content-type", "application/json")
-            self.send_header("Access-Control-Allow-Origin", "*")
+            self._send_cors()
             self.end_headers()
             self.wfile.write(json.dumps(settings).encode())
-        else:
-            self.send_response(404)
+        elif self.path in ("/", ""):
+            # Redirect bare root to control.html
+            self.send_response(302)
+            self.send_header("Location", "/control.html")
             self.end_headers()
-    
+        else:
+            self._serve_file(self.path)
+
     def do_POST(self):
         """Handle POST requests for saving settings."""
         if self.path == "/api/settings":
@@ -98,7 +147,7 @@ class SettingsHTTPHandler(BaseHTTPRequestHandler):
                 if save_settings(settings):
                     self.send_response(200)
                     self.send_header("Content-type", "application/json")
-                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self._send_cors()
                     self.end_headers()
                     self.wfile.write(json.dumps({"status": "ok"}).encode())
                     print(f"[Settings] Saved: {settings}")
@@ -112,24 +161,24 @@ class SettingsHTTPHandler(BaseHTTPRequestHandler):
         else:
             self.send_response(404)
             self.end_headers()
-    
+
     def do_OPTIONS(self):
         """Handle CORS preflight requests."""
         self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self._send_cors()
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
-    
+
     def log_message(self, format, *args):
-        """Suppress default logging."""
+        """Suppress default logging (file serves are logged explicitly above)."""
         pass
 
 
 def run_http_server():
     """Run HTTP server for settings I/O in a separate thread."""
     server = HTTPServer(("0.0.0.0", HTTP_PORT), SettingsHTTPHandler)
-    print(f"[HTTP] Settings server running on http://0.0.0.0:{HTTP_PORT}")
+    print(f"[HTTP] Static file + settings server on http://localhost:{HTTP_PORT}")
     server.serve_forever()
 
 
@@ -178,13 +227,6 @@ async def handler(websocket):
                     state = int(obj.get("state", 0))
                     pkt = struct.pack("Bb", 0xFF, state)
                     udp_sock.sendto(pkt, (PI_IP, UDP_CMD_PORT))
-                
-                elif cmd == "servo":
-                    sid   = int(obj.get("id", 1))
-                    angle = int(obj.get("angle", 90))
-                    import json as _json
-                    payload = bytes([0xAA]) + _json.dumps({"cmd":"servo","id":sid,"angle":angle}).encode()
-                    udp_sock.sendto(payload, (PI_IP, 3391))  # UDPS.py listens on 3391
 
             except Exception as e:
                 print(f"[WS] Error handling message: {e}")
@@ -208,7 +250,7 @@ async def main():
     print(f"[WS] Forwarding UDP to {PI_IP}:{UDP_CMD_PORT}")
     print(f"[WS] Listening for UDP feedback on port {UDP_FB_PORT}")
     print(f"[Settings] File-based storage enabled: {SETTINGS_FILE}")
-    print(f"[Settings] Open control.html in your browser to start.\n")
+    print(f"[HTTP]    Open  http://localhost:{HTTP_PORT}/control.html  in your browser.\n")
 
     async with websockets.serve(handler, WS_HOST, WS_PORT):
         await asyncio.Future()

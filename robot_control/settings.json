@@ -15,5 +15,81 @@
       "warn": 60,
       "crit": 75
     }
+  },
+  "simInit": {
+    "front": {
+      "cur": 85,
+      "tgt": 85
+    },
+    "back": {
+      "cur": 96,
+      "tgt": 96
+    },
+    "arm1": {
+      "cur": 175,
+      "tgt": 175
+    },
+    "arm2": {
+      "cur": 30,
+      "tgt": 30
+    },
+    "arm3": {
+      "cur": 0,
+      "tgt": 0
+    },
+    "arm4": {
+      "cur": 60,
+      "tgt": 60
+    },
+    "arm5": {
+      "cur": 110,
+      "tgt": 110
+    },
+    "gripper": {
+      "cur": 90,
+      "tgt": 90
+    }
+  },
+  "simCal": {
+    "front": {
+      "n": 85,
+      "dir": 1,
+      "scale": 0.95
+    },
+    "back": {
+      "n": 96,
+      "dir": 1,
+      "scale": 0.85
+    },
+    "arm1": {
+      "n": 175,
+      "dir": 1,
+      "scale": 1.2
+    },
+    "arm2": {
+      "n": 30,
+      "dir": -1,
+      "scale": 1.5
+    },
+    "arm3": {
+      "n": 90,
+      "dir": -1,
+      "scale": 1
+    },
+    "arm4": {
+      "n": 60,
+      "dir": -1,
+      "scale": 1
+    },
+    "arm5": {
+      "n": 90,
+      "dir": 1,
+      "scale": 1
+    },
+    "gripper": {
+      "n": 90,
+      "dir": 1,
+      "scale": 1
+    }
   }
 }

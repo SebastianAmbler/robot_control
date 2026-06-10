@@ -737,6 +737,114 @@
   }
   .param-btn:hover { border-color: var(--accent); color: var(--accent); }
   .param-btn.save:hover { border-color: var(--ok); color: var(--ok); }
+
+  /* ── Sim section ── */
+  #sim-section {
+    flex-shrink: 0;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    height: 220px;
+    min-height: 0;
+    position: relative;
+  }
+  #sim-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 12px 4px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    z-index: 1;
+  }
+  #sim-label {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  #sim-source-tag {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--border2);
+    text-transform: uppercase;
+  }
+  #sim-source-tag.live { color: var(--ok); }
+  #sim-iframe {
+    flex: 1;
+    width: 100%;
+    border: none;
+    background: #111;
+    display: block;
+    min-height: 0;
+  }
+
+  /* ── Sim params in overlay ── */
+  .sim-cal-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 4px 6px;
+    align-items: center;
+  }
+  .sim-cal-head {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--border2);
+    text-transform: uppercase;
+    text-align: center;
+    padding-bottom: 2px;
+  }
+  .sim-cal-label {
+    font-size: 10px;
+    color: var(--muted);
+    padding-right: 4px;
+  }
+  .sim-cal-grid input[type="number"] {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 10px;
+    padding: 3px 5px;
+    outline: none;
+    min-width: 0;
+    text-align: center;
+  }
+  .sim-cal-grid input[type="number"]:focus { border-color: var(--accent2); }
+
+  .sim-init-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 4px 6px;
+    align-items: center;
+  }
+  .sim-init-head {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--border2);
+    text-transform: uppercase;
+    text-align: center;
+    padding-bottom: 2px;
+  }
+  .sim-init-label {
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .sim-init-grid input[type="number"] {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 10px;
+    padding: 3px 5px;
+    outline: none;
+    min-width: 0;
+    text-align: center;
+  }
+  .sim-init-grid input[type="number"]:focus { border-color: var(--accent2); }
 </style>
 </head>
 <body>
@@ -763,6 +871,13 @@
   </div>
   <div id="ws-row">
     <button id="ws-connect" onclick="connectWS()">Connect</button>
+  </div>
+  <div id="sim-section">
+    <div id="sim-header">
+      <span id="sim-label">Sim</span>
+      <span id="sim-source-tag">client</span>
+    </div>
+    <iframe id="sim-iframe" src="http://localhost:8766/index.html" scrolling="no" allowfullscreen></iframe>
   </div>
 </div>
 
@@ -860,6 +975,14 @@
         </div>
         <div id="auto-brake-status" style="font-size:10px; color:var(--muted); margin-top:2px;"></div>
       </div>
+      <div class="setting-group">
+        <div class="setting-group-label">Simulation</div>
+        <div class="setting-row">
+          <label for="sim-from-udps-chk">Angles from UDPS feedback</label>
+          <input type="checkbox" id="sim-from-udps-chk" onchange="toggleSimSource()" />
+        </div>
+        <div id="sim-source-status" style="font-size:10px; color:var(--muted); margin-top:2px;">Using client-side slider positions</div>
+      </div>
       <button id="params-btn" onclick="openParams()">Parameters</button>
     </div>
   </div>
@@ -918,6 +1041,84 @@
           <input type="number" id="tmp-crit" min="0" max="120" step="1">
         </div>
       </div>
+
+      <div class="param-group">
+        <div class="param-group-label">Sim — Initial Angles (cur / tgt)</div>
+        <div class="sim-init-grid">
+          <div class="sim-init-head">Servo</div>
+          <div class="sim-init-head">Cur</div>
+          <div class="sim-init-head">Tgt</div>
+          <div class="sim-init-label">Front</div>
+          <input type="number" id="sim-init-front-cur" min="0" max="180" step="1">
+          <input type="number" id="sim-init-front-tgt" min="0" max="180" step="1">
+          <div class="sim-init-label">Back</div>
+          <input type="number" id="sim-init-back-cur" min="0" max="180" step="1">
+          <input type="number" id="sim-init-back-tgt" min="0" max="180" step="1">
+          <div class="sim-init-label">Arm1</div>
+          <input type="number" id="sim-init-arm1-cur" min="0" max="180" step="1">
+          <input type="number" id="sim-init-arm1-tgt" min="0" max="180" step="1">
+          <div class="sim-init-label">Arm2</div>
+          <input type="number" id="sim-init-arm2-cur" min="0" max="180" step="1">
+          <input type="number" id="sim-init-arm2-tgt" min="0" max="180" step="1">
+          <div class="sim-init-label">Arm3</div>
+          <input type="number" id="sim-init-arm3-cur" min="0" max="180" step="1">
+          <input type="number" id="sim-init-arm3-tgt" min="0" max="180" step="1">
+          <div class="sim-init-label">Arm4</div>
+          <input type="number" id="sim-init-arm4-cur" min="0" max="180" step="1">
+          <input type="number" id="sim-init-arm4-tgt" min="0" max="180" step="1">
+          <div class="sim-init-label">Arm5</div>
+          <input type="number" id="sim-init-arm5-cur" min="0" max="180" step="1">
+          <input type="number" id="sim-init-arm5-tgt" min="0" max="180" step="1">
+          <div class="sim-init-label">Gripper</div>
+          <input type="number" id="sim-init-gripper-cur" min="0" max="180" step="1">
+          <input type="number" id="sim-init-gripper-tgt" min="0" max="180" step="1">
+        </div>
+      </div>
+
+      <div class="param-group">
+        <div class="param-group-label">Sim — Calibration (n / dir / scale / offset)</div>
+        <div class="sim-cal-grid">
+          <div class="sim-cal-head">Servo</div>
+          <div class="sim-cal-head">n°</div>
+          <div class="sim-cal-head">dir</div>
+          <div class="sim-cal-head">scale</div>
+          <!-- front -->
+          <div class="sim-cal-label">Front</div>
+          <input type="number" id="cal-front-n"     step="1"   min="-360" max="360">
+          <input type="number" id="cal-front-dir"   step="1"   min="-1"   max="1">
+          <input type="number" id="cal-front-scale" step="0.01" min="-10" max="10">
+          <!-- back -->
+          <div class="sim-cal-label">Back</div>
+          <input type="number" id="cal-back-n"     step="1"   min="-360" max="360">
+          <input type="number" id="cal-back-dir"   step="1"   min="-1"   max="1">
+          <input type="number" id="cal-back-scale" step="0.01" min="-10" max="10">
+          <!-- arm1 -->
+          <div class="sim-cal-label">Arm1</div>
+          <input type="number" id="cal-arm1-n"     step="1"   min="-360" max="360">
+          <input type="number" id="cal-arm1-dir"   step="1"   min="-1"   max="1">
+          <input type="number" id="cal-arm1-scale" step="0.01" min="-10" max="10">
+          <!-- arm2 -->
+          <div class="sim-cal-label">Arm2</div>
+          <input type="number" id="cal-arm2-n"     step="1"   min="-360" max="360">
+          <input type="number" id="cal-arm2-dir"   step="1"   min="-1"   max="1">
+          <input type="number" id="cal-arm2-scale" step="0.01" min="-10" max="10">
+          <!-- arm3 -->
+          <div class="sim-cal-label">Arm3</div>
+          <input type="number" id="cal-arm3-n"     step="1"   min="-360" max="360">
+          <input type="number" id="cal-arm3-dir"   step="1"   min="-1"   max="1">
+          <input type="number" id="cal-arm3-scale" step="0.01" min="-10" max="10">
+          <!-- arm4 -->
+          <div class="sim-cal-label">Arm4</div>
+          <input type="number" id="cal-arm4-n"     step="1"   min="-360" max="360">
+          <input type="number" id="cal-arm4-dir"   step="1"   min="-1"   max="1">
+          <input type="number" id="cal-arm4-scale" step="0.01" min="-10" max="10">
+          <!-- gripper -->
+          <div class="sim-cal-label">Gripper</div>
+          <input type="number" id="cal-gripper-n"     step="1"   min="-360" max="360">
+          <input type="number" id="cal-gripper-dir"   step="1"   min="-1"   max="1">
+          <input type="number" id="cal-gripper-scale" step="0.01" min="-10" max="10">
+        </div>
+      </div>
     </div>
     <div id="params-footer">
       <button class="param-btn" onclick="resetParams()">Reset</button>
@@ -938,6 +1139,60 @@ const THRESHOLDS = {
   tor: { warn: 0.96, crit: 2.0 },   // Nm: rated torque (warn), stall torque (crit)
   tmp: { warn: 60,   crit: 75  },
 };
+
+// ─── Sim ──────────────────────────────────────────────────────────────────────
+// Maps SERVOS index → sim servo key (matches IDX_TO_KEY in index.html)
+const SIM_KEYS = ['front','back','arm1','arm2','arm3','arm4','arm5','gripper'];
+
+let simFromUDPS = false;  // if true, use ANGLES: feedback; else use slider positions
+
+// Initial servo states for the simulation
+const SIM_INIT = {
+  front:   { cur: 85,  tgt: 85  },
+  back:    { cur: 96,  tgt: 96  },
+  arm1:    { cur: 175, tgt: 175 },
+  arm2:    { cur: 30,  tgt: 30  },
+  arm3:    { cur: 0,   tgt: 0   },
+  arm4:    { cur: 60,  tgt: 60  },
+  arm5:    { cur: 110, tgt: 110 },
+  gripper: { cur: 90,  tgt: 90  },
+};
+
+// Calibration values for the simulation
+const SIM_CAL = {
+  front:   { n: 85,  dir: 1,  scale: 0.95 },
+  back:    { n: 96,  dir: 1,  scale: 0.85 },
+  arm1:    { n: 175, dir: 1,  scale: 1.2  },
+  arm2:    { n: 30,  dir: 1,  scale: 1.5  },
+  arm3:    { n: 90,  dir: -1, scale: 1.0  },
+  arm4:    { n: 60,  dir: -1, scale: 1.0  },
+  arm5:    { n: 90,  dir: 1,  scale: 1.0  },
+  gripper: { n: 90,  dir: 1,  scale: 1.0  },
+};
+
+// Track latest angles for the sim (indexed 0-7)
+let simAngles = SIM_KEYS.map(k => SIM_INIT[k].tgt);
+
+function postSimState(angles) {
+  const iframe = document.getElementById('sim-iframe');
+  if (!iframe || !iframe.contentWindow) return;
+  iframe.contentWindow.postMessage({ type: 'state', angles, cal: SIM_CAL }, '*');
+}
+
+function pushSimFromSliders() {
+  if (simFromUDPS) return;
+  const angles = SERVOS.map((s, i) => {
+    const slider = document.getElementById('sv-slider-' + s.id);
+    return slider ? parseInt(slider.value) : SIM_INIT[SIM_KEYS[i]]?.tgt ?? 90;
+  });
+  simAngles = angles;
+  postSimState(angles);
+}
+
+// Push sim state at a modest interval so it stays in sync even without a slider change
+setInterval(() => {
+  if (!simFromUDPS) pushSimFromSliders();
+}, 200);
 
 // ─── State ────────────────────────────────────────────────────────────────────
 let ws        = null;
@@ -990,6 +1245,7 @@ function buildServoUI() {
       const v = parseInt(slider.value);
       label.textContent = v + "°";
       sendServo(s.id, v);
+      pushSimFromSliders();
     });
   });
 }
@@ -1005,9 +1261,11 @@ function sendServo(id, angle) {
 // Format: ANGLES:90,90,90,25,20,85,122,90
 function applyAngles(csv) {
   const parts = csv.split(",");
+  const angles = [];
   SERVOS.forEach((s, i) => {
     const v = parseInt(parts[i]);
-    if (isNaN(v)) return;
+    if (isNaN(v)) { angles.push(simAngles[i] ?? 90); return; }
+    angles.push(v);
     const slider = document.getElementById("sv-slider-" + s.id);
     const label  = document.getElementById("sv-angle-"  + s.id);
     if (!slider || !label) return;
@@ -1018,6 +1276,11 @@ function applyAngles(csv) {
     label.textContent = v + "°";
     label.classList.toggle("live", true);
   });
+  // Forward to sim if UDPS source is enabled
+  if (simFromUDPS) {
+    simAngles = angles;
+    postSimState(angles);
+  }
 }
 
 // ─── Gear UI build ────────────────────────────────────────────────────────────
@@ -1071,6 +1334,7 @@ function saveSettings() {
     wsUrl:       document.getElementById("ws-input").value,
     autoConnect: document.getElementById("auto-connect-chk").checked,
     autoBrake:   document.getElementById("auto-brake-chk").checked,
+    simFromUDPS: document.getElementById("sim-from-udps-chk").checked,
   }));
 }
 
@@ -1082,6 +1346,14 @@ function loadSettings() {
       autoBrake = true;
       document.getElementById("auto-brake-chk").checked = true;
       document.getElementById("auto-brake-status").textContent = "Brakes engage when all keys released";
+    }
+    if (s.simFromUDPS) {
+      simFromUDPS = true;
+      document.getElementById("sim-from-udps-chk").checked = true;
+      document.getElementById("sim-source-status").textContent = "Using UDPS ANGLES: feedback";
+      const tag = document.getElementById("sim-source-tag");
+      tag.textContent = "udps";
+      tag.classList.add("live");
     }
     if (s.autoConnect) {
       document.getElementById("auto-connect-chk").checked = true;
@@ -1108,6 +1380,25 @@ function toggleAutoBrake() {
   document.getElementById("auto-brake-status").textContent =
     autoBrake ? "Brakes engage when all keys released" : "";
   log("Auto-brake " + (autoBrake ? "ON" : "OFF"), "info");
+  saveSettings();
+}
+
+function toggleSimSource() {
+  simFromUDPS = document.getElementById("sim-from-udps-chk").checked;
+  const tag = document.getElementById("sim-source-tag");
+  const status = document.getElementById("sim-source-status");
+  if (simFromUDPS) {
+    tag.textContent = "udps";
+    tag.classList.add("live");
+    status.textContent = "Using UDPS ANGLES: feedback";
+    log("Sim: angles from UDPS feedback", "info");
+  } else {
+    tag.textContent = "client";
+    tag.classList.remove("live");
+    status.textContent = "Using client-side slider positions";
+    log("Sim: angles from client sliders", "info");
+    pushSimFromSliders();
+  }
   saveSettings();
 }
 
@@ -1145,6 +1436,24 @@ function loadParams() {
           THRESHOLDS.tmp.crit = p.thresholds.tmp.crit || 75;
         }
       }
+      // Update SIM_INIT and SIM_CAL from file
+      if (p.simInit) {
+        SIM_KEYS.forEach(k => {
+          if (p.simInit[k]) {
+            if (p.simInit[k].cur !== undefined) SIM_INIT[k].cur = p.simInit[k].cur;
+            if (p.simInit[k].tgt !== undefined) SIM_INIT[k].tgt = p.simInit[k].tgt;
+          }
+        });
+      }
+      if (p.simCal) {
+        SIM_KEYS.forEach(k => {
+          if (p.simCal[k]) {
+            if (p.simCal[k].n     !== undefined) SIM_CAL[k].n     = p.simCal[k].n;
+            if (p.simCal[k].dir   !== undefined) SIM_CAL[k].dir   = p.simCal[k].dir;
+            if (p.simCal[k].scale !== undefined) SIM_CAL[k].scale = p.simCal[k].scale;
+          }
+        });
+      }
       // Populate form fields
       for (let i = 0; i < GEARS.length; i++) {
         document.getElementById("gear-" + i).value = GEARS[i];
@@ -1153,6 +1462,23 @@ function loadParams() {
       document.getElementById("tor-crit").value = THRESHOLDS.tor.crit;
       document.getElementById("tmp-warn").value = THRESHOLDS.tmp.warn;
       document.getElementById("tmp-crit").value = THRESHOLDS.tmp.crit;
+      // Populate sim init fields
+      SIM_KEYS.forEach(k => {
+        const curEl = document.getElementById("sim-init-" + k + "-cur");
+        const tgtEl = document.getElementById("sim-init-" + k + "-tgt");
+        if (curEl) curEl.value = SIM_INIT[k].cur;
+        if (tgtEl) tgtEl.value = SIM_INIT[k].tgt;
+      });
+      // Populate sim cal fields
+      const calKeys = ['front','back','arm1','arm2','arm3','arm4','gripper'];
+      calKeys.forEach(k => {
+        const nEl     = document.getElementById("cal-" + k + "-n");
+        const dirEl   = document.getElementById("cal-" + k + "-dir");
+        const scaleEl = document.getElementById("cal-" + k + "-scale");
+        if (nEl)     nEl.value     = SIM_CAL[k].n;
+        if (dirEl)   dirEl.value   = SIM_CAL[k].dir;
+        if (scaleEl) scaleEl.value = SIM_CAL[k].scale;
+      });
     })
     .catch(e => log("Error loading parameters: " + e.message, "warn"));
 }
@@ -1177,20 +1503,43 @@ function saveParams() {
   
   const tmpCrit = parseFloat(document.getElementById("tmp-crit").value);
   if (!isNaN(tmpCrit) && tmpCrit >= 0) THRESHOLDS.tmp.crit = tmpCrit;
-  
+
+  // Update SIM_INIT from form
+  SIM_KEYS.forEach(k => {
+    const curEl = document.getElementById("sim-init-" + k + "-cur");
+    const tgtEl = document.getElementById("sim-init-" + k + "-tgt");
+    if (curEl) { const v = parseFloat(curEl.value); if (!isNaN(v)) SIM_INIT[k].cur = v; }
+    if (tgtEl) { const v = parseFloat(tgtEl.value); if (!isNaN(v)) SIM_INIT[k].tgt = v; }
+  });
+
+  // Update SIM_CAL from form
+  const calKeys = ['front','back','arm1','arm2','arm3','arm4','gripper'];
+  calKeys.forEach(k => {
+    const nEl     = document.getElementById("cal-" + k + "-n");
+    const dirEl   = document.getElementById("cal-" + k + "-dir");
+    const scaleEl = document.getElementById("cal-" + k + "-scale");
+    if (nEl)     { const v = parseFloat(nEl.value);     if (!isNaN(v)) SIM_CAL[k].n     = v; }
+    if (dirEl)   { const v = parseFloat(dirEl.value);   if (!isNaN(v)) SIM_CAL[k].dir   = v; }
+    if (scaleEl) { const v = parseFloat(scaleEl.value); if (!isNaN(v)) SIM_CAL[k].scale = v; }
+  });
+
   // Save to file via API
   fetch("http://localhost:8766/api/settings", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       gears: GEARS,
-      thresholds: THRESHOLDS
+      thresholds: THRESHOLDS,
+      simInit: SIM_INIT,
+      simCal: SIM_CAL,
     })
   })
   .then(r => r.json())
   .then(data => {
     buildGearUI();
-    log("Parameters saved to file: " + GEARS.map((g,i) => `G${i+1}=${g}`).join("  "), "info");
+    // Push updated CAL to iframe immediately
+    postSimState(simAngles);
+    log("Parameters saved: " + GEARS.map((g,i) => `G${i+1}=${g}`).join("  "), "info");
     closeParams();
   })
   .catch(e => log("Error saving parameters: " + e.message, "error"));
@@ -1203,7 +1552,27 @@ function resetParams() {
       thresholds: {
         tor: { warn: 0.96, crit: 2.0 },
         tmp: { warn: 60, crit: 75 }
-      }
+      },
+      simInit: {
+        front:   { cur: 85,  tgt: 85  },
+        back:    { cur: 96,  tgt: 96  },
+        arm1:    { cur: 175, tgt: 175 },
+        arm2:    { cur: 30,  tgt: 30  },
+        arm3:    { cur: 0,   tgt: 0   },
+        arm4:    { cur: 60,  tgt: 60  },
+        arm5:    { cur: 110, tgt: 110 },
+        gripper: { cur: 90,  tgt: 90  },
+      },
+      simCal: {
+        front:   { n: 85,  dir: 1,  scale: 0.95 },
+        back:    { n: 96,  dir: 1,  scale: 0.85 },
+        arm1:    { n: 175, dir: 1,  scale: 1.2  },
+        arm2:    { n: 30,  dir: 1,  scale: 1.5  },
+        arm3:    { n: 90,  dir: -1, scale: 1.0  },
+        arm4:    { n: 60,  dir: -1, scale: 1.0  },
+        arm5:    { n: 90,  dir: 1,  scale: 1.0  },
+        gripper: { n: 90,  dir: 1,  scale: 1.0  },
+      },
     };
     
     fetch("http://localhost:8766/api/settings", {
@@ -1216,7 +1585,12 @@ function resetParams() {
       GEARS.push(...defaults.gears);
       THRESHOLDS.tor = defaults.thresholds.tor;
       THRESHOLDS.tmp = defaults.thresholds.tmp;
+      SIM_KEYS.forEach(k => {
+        if (defaults.simInit[k]) { SIM_INIT[k].cur = defaults.simInit[k].cur; SIM_INIT[k].tgt = defaults.simInit[k].tgt; }
+        if (defaults.simCal[k])  { SIM_CAL[k].n = defaults.simCal[k].n; SIM_CAL[k].dir = defaults.simCal[k].dir; SIM_CAL[k].scale = defaults.simCal[k].scale; }
+      });
       buildGearUI();
+      postSimState(simAngles);
       log("Parameters reset to defaults", "info");
       closeParams();
     })
@@ -1245,10 +1619,29 @@ function loadParamSettings() {
           THRESHOLDS.tmp.crit = p.thresholds.tmp.crit || 75;
         }
       }
+      if (p.simInit) {
+        SIM_KEYS.forEach(k => {
+          if (p.simInit[k]) {
+            if (p.simInit[k].cur !== undefined) SIM_INIT[k].cur = p.simInit[k].cur;
+            if (p.simInit[k].tgt !== undefined) SIM_INIT[k].tgt = p.simInit[k].tgt;
+          }
+        });
+      }
+      if (p.simCal) {
+        SIM_KEYS.forEach(k => {
+          if (p.simCal[k]) {
+            if (p.simCal[k].n     !== undefined) SIM_CAL[k].n     = p.simCal[k].n;
+            if (p.simCal[k].dir   !== undefined) SIM_CAL[k].dir   = p.simCal[k].dir;
+            if (p.simCal[k].scale !== undefined) SIM_CAL[k].scale = p.simCal[k].scale;
+          }
+        });
+      }
       // Rebuild UI with loaded settings
       buildGearUI();
       buildServoUI();
       log("Gears: " + GEARS.map((g,i) => `G${i+1}=${g}`).join("  "));
+      // Push initial sim state after a short delay (give iframe time to load)
+      setTimeout(() => pushSimFromSliders(), 1500);
     })
     .catch(e => {
       log("Warning: Could not load parameters from file. Using defaults. (" + e.message + ")", "warn");
@@ -1256,6 +1649,7 @@ function loadParamSettings() {
       buildGearUI();
       buildServoUI();
       log("Gears: " + GEARS.map((g,i) => `G${i+1}=${g}`).join("  "));
+      setTimeout(() => pushSimFromSliders(), 1500);
     });
   return { gears: GEARS, thresholds: THRESHOLDS };
 }
