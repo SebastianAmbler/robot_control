@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>3D Robot - WebSocket Bridge</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        body { margin: 0; overflow: hidden; background: #fff9f9; font-family: sans-serif; }
         #ui { display: none; }
         #wsStatus { font-family: monospace; font-size: 12px; padding: 5px 10px; border-radius: 4px; border: 1px solid #333; background: #111; margin-bottom: 6px; }
         #wsStatus.connected { color: #0f0; border-color: #0f0; }
@@ -126,6 +126,7 @@ function servoToRad(deg, key) {
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x111111);
+scene.add(new THREE.GridHelper(1000, 20, 0x444444, 0x222222));
 const camera = new THREE.OrthographicCamera(
     innerWidth / -2, innerWidth / 2,
     innerHeight / 2, innerHeight / -2,
@@ -140,7 +141,6 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(devicePixelRatio);
 document.body.appendChild(renderer.domElement);
 const controls = { update: () => {} };
-scene.add(new THREE.GridHelper(1000, 20, 0x444444, 0x222222));
 scene.add(new THREE.AmbientLight(0xffffff, 0.8));
 const dl = new THREE.DirectionalLight(0xffffff, 1);
 dl.position.set(200,500,200); scene.add(dl);
@@ -157,7 +157,7 @@ function addLeg(geo, x, y, z, mirror, type, preRot={}) {
     const g = geo.clone();
     g.computeBoundingBox(); const b = g.boundingBox;
     g.translate(-(b.max.x+b.min.x)/2, -b.max.y, -(b.max.z+b.min.z)/2);
-    const mesh = new THREE.Mesh(g, new THREE.MeshPhongMaterial({ color:0x2b2828, shininess:80 }));
+    const mesh = new THREE.Mesh(g, new THREE.MeshPhongMaterial({ color:0x423e3e, shininess:80 }));
     if (mirror) mesh.scale.x = -1;
     if (preRot.x !== undefined) mesh.rotation.x = preRot.x;
     if (preRot.z !== undefined) mesh.rotation.z = preRot.z;

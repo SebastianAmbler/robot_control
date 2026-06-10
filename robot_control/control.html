@@ -162,8 +162,8 @@
     background: var(--surface);
     border-top: 1px solid var(--border);
     display: grid;
-    grid-template-columns: minmax(0, 200px) 1fr minmax(0, 200px);
-    align-items: center;
+    grid-template-columns: minmax(0, 320px) 1fr minmax(0, 200px);
+    align-items: stretch;
     padding: 0 16px;
     gap: 16px;
     min-width: 0;
@@ -177,6 +177,9 @@
     align-items: center;
     min-width: 0;
     overflow: hidden;
+  }
+  #left-panel #gear-display {
+    flex-wrap: wrap;
   }
   .gear-pip {
     width: 28px; height: 28px;
@@ -270,44 +273,6 @@
   }
   .bar-fill.reverse { background: var(--warn); }
 
-  /* ── Gear speeds ── */
-  #gear-speeds {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-  .gear-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 11px;
-  }
-  .gear-num {
-    width: 14px;
-    color: var(--muted);
-    text-align: right;
-    flex-shrink: 0;
-  }
-  .gear-row.current .gear-num { color: var(--accent); }
-  .gear-bar-bg {
-    flex: 1;
-    height: 3px;
-    background: var(--surface2);
-  }
-  .gear-bar-fg {
-    height: 100%;
-    background: var(--border2);
-    transition: width 0.1s;
-  }
-  .gear-row.current .gear-bar-fg { background: var(--accent); }
-  .gear-spd {
-    font-size: 10px;
-    color: var(--muted);
-    min-width: 36px;
-    text-align: right;
-  }
-  .gear-row.current .gear-spd { color: var(--accent); }
-
   /* ── Servo panel ── */
   #servo-section {
     flex: 1;
@@ -334,17 +299,20 @@
   #servo-container::-webkit-scrollbar-thumb { background: var(--border2); }
   .servo-row {
     display: flex;
-    flex-direction: column;
-    gap: 4px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
     padding: 7px 0;
     border-bottom: 1px solid var(--border);
     min-width: 0;
   }
   .servo-row:last-child { border-bottom: none; }
   .servo-header {
+    flex: 1;
     display: flex;
     justify-content: space-between;
     align-items: baseline;
+    gap: 8px;
     min-width: 0;
   }
   .servo-name {
@@ -361,48 +329,30 @@
     font-variant-numeric: tabular-nums;
   }
   .servo-angle.live { color: var(--accent); }
-  .servo-slider-wrap {
+  .servo-hotkey {
     display: flex;
     align-items: center;
-    gap: 6px;
-    min-width: 0;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: 1px solid var(--border2);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    flex-shrink: 0;
   }
-  .servo-slider {
-    flex: 1;
-    height: 3px;
-    border-radius: 0;
-    background: var(--surface2);
-    outline: none;
-    cursor: pointer;
-    appearance: none;
-    -webkit-appearance: none;
-    min-width: 0;
+  .servo-row.active .servo-hotkey {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(200,255,0,0.06);
   }
-  .servo-slider::-webkit-slider-thumb {
-    appearance: none;
-    -webkit-appearance: none;
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    background: var(--accent);
-    cursor: pointer;
-  }
-  .servo-slider::-moz-range-thumb {
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    background: var(--accent);
-    cursor: pointer;
-    border: none;
-  }
-  .servo-slider::-webkit-slider-thumb:hover { background: var(--accent2); }
-  .servo-slider::-moz-range-thumb:hover     { background: var(--accent2); }
-  .servo-limit {
+  .servo-range {
     font-size: 9px;
     color: var(--border2);
     flex-shrink: 0;
-    width: 22px;
-    text-align: center;
+    min-width: 48px;
+    text-align: right;
     font-variant-numeric: tabular-nums;
   }
 
@@ -748,6 +698,11 @@
     min-height: 0;
     position: relative;
   }
+  #footer #sim-section {
+    align-self: stretch;
+    height: auto;
+    border-top: none;
+  }
   #sim-header {
     display: flex;
     align-items: center;
@@ -863,7 +818,7 @@
 <div id="left-panel">
   <div class="panel-section">
     <div class="panel-label">Gear</div>
-    <div id="gear-speeds"></div>
+    <div id="gear-display"></div>
   </div>
   <div id="log-section">
     <div class="panel-label">Log</div>
@@ -871,13 +826,6 @@
   </div>
   <div id="ws-row">
     <button id="ws-connect" onclick="connectWS()">Connect</button>
-  </div>
-  <div id="sim-section">
-    <div id="sim-header">
-      <span id="sim-label">Sim</span>
-      <span id="sim-source-tag">client</span>
-    </div>
-    <iframe id="sim-iframe" src="http://localhost:8766/index.html" scrolling="no" allowfullscreen></iframe>
   </div>
 </div>
 
@@ -913,7 +861,13 @@
 
 <!-- FOOTER -->
 <div id="footer">
-  <div id="gear-display"></div>
+  <div id="sim-section">
+    <div id="sim-header">
+      <span id="sim-label">Sim</span>
+      <span id="sim-source-tag">client</span>
+    </div>
+    <iframe id="sim-iframe" src="http://localhost:8766/index.html" scrolling="no" allowfullscreen></iframe>
+  </div>
 
   <div id="footer-center">
     <div id="wasd">
@@ -924,11 +878,11 @@
         <div class="key" id="key-d">D</div>
       </div>
     </div>
-    <div style="font-size:10px; color:var(--muted); text-align:center; line-height:1.8;">
-      <div>WASD  move</div>
-      <div>G  gear up</div>
-      <div>L  lock toggle</div>
-    </div>
+      <div style="font-size:10px; color:var(--muted); text-align:center; line-height:1.8;">
+        <div>WASD  move</div>
+        <div>G  gear up</div>
+        <div>Y-L + / -  servo</div>
+      </div>
   </div>
 
   <div id="footer-right">
@@ -1208,15 +1162,17 @@ let lastAngular = null;
 // min/max: hard limits from SERVO_MIN/MAX in sketch
 // home: initial angle set at boot
 const SERVOS = [
-  { id: 1, name: "Front Flip", min:   0, max: 180, home:  90 },
-  { id: 2, name: "Back Flip",  min:  30, max: 150, home:  90 },
-  { id: 3, name: "Shoulder",   min:   0, max: 180, home:  90 },
-  { id: 4, name: "Elbow",      min:  25, max: 150, home:  25 },
-  { id: 5, name: "Extend",     min:   0, max: 180, home:  20 },
-  { id: 6, name: "Wrist",     min:   0, max: 180, home:  85 },
-  { id: 7, name: "Wrist Roll", min:   0, max: 180, home: 122 },
-  { id: 8, name: "Gripper",    min:   0, max: 180, home:  90 },
+  { id: 1, key: "y", name: "Front Flip", min:   0, max: 180, home:  90 },
+  { id: 2, key: "u", name: "Back Flip",  min:  30, max: 150, home:  90 },
+  { id: 3, key: "i", name: "Shoulder",   min:   0, max: 180, home:  90 },
+  { id: 4, key: "o", name: "Elbow",      min:  25, max: 150, home:  25 },
+  { id: 5, key: "h", name: "Extend",     min:   0, max: 180, home:  20 },
+  { id: 6, key: "j", name: "Wrist",      min:   0, max: 180, home:  85 },
+  { id: 7, key: "k", name: "Wrist Roll", min:   0, max: 180, home: 122 },
+  { id: 8, key: "l", name: "Gripper",    min:   0, max: 180, home:  90 },
 ];
+const SERVO_STEP = 5;
+let activeServoId = null;
 
 // ─── Servo UI build ───────────────────────────────────────────────────────────
 function buildServoUI() {
@@ -1225,29 +1181,18 @@ function buildServoUI() {
   SERVOS.forEach(s => {
     const row = document.createElement("div");
     row.className = "servo-row";
+    row.id = `sv-row-${s.id}`;
     row.innerHTML = `
       <div class="servo-header">
         <span class="servo-name">${s.name}</span>
         <span class="servo-angle" id="sv-angle-${s.id}">${s.home}°</span>
       </div>
-      <div class="servo-slider-wrap">
-        <span class="servo-limit">${s.min}</span>
-        <input type="range" class="servo-slider" id="sv-slider-${s.id}"
-          min="${s.min}" max="${s.max}" value="${s.home}">
-        <span class="servo-limit">${s.max}</span>
-      </div>`;
+      <div class="servo-hotkey">${s.key}</div>
+      <div class="servo-range">${s.min}-${s.max}</div>
+      <input type="hidden" id="sv-slider-${s.id}" value="${s.home}">`;
     container.appendChild(row);
-
-    // Wire up slider
-    const slider = row.querySelector(`#sv-slider-${s.id}`);
-    const label  = row.querySelector(`#sv-angle-${s.id}`);
-    slider.addEventListener("input", () => {
-      const v = parseInt(slider.value);
-      label.textContent = v + "°";
-      sendServo(s.id, v);
-      pushSimFromSliders();
-    });
   });
+  updateActiveServoUI();
 }
 
 // ─── Servo send ───────────────────────────────────────────────────────────────
@@ -1255,6 +1200,52 @@ function sendServo(id, angle) {
   const ok = ws && ws.readyState === WebSocket.OPEN;
   send({ cmd: "servo", id, angle });
   log((ok ? "servo" : "servo [NO WS]") + "  id=" + id + "  angle=" + angle, ok ? "" : "warn");
+}
+
+function setServoAngle(id, angle, shouldSend = true) {
+  const s = SERVOS.find(servo => servo.id === id);
+  if (!s) return;
+  const v = Math.max(s.min, Math.min(s.max, Math.round(angle)));
+  const value = document.getElementById("sv-slider-" + id);
+  const label = document.getElementById("sv-angle-" + id);
+  if (value) value.value = v;
+  if (label) {
+    label.textContent = v + "°";
+    label.classList.toggle("live", false);
+  }
+  if (shouldSend) {
+    sendServo(id, v);
+    pushSimFromSliders();
+  }
+}
+
+function getServoAngle(id) {
+  const s = SERVOS.find(servo => servo.id === id);
+  const value = document.getElementById("sv-slider-" + id);
+  const v = value ? parseInt(value.value) : NaN;
+  return isNaN(v) ? (s ? s.home : 90) : v;
+}
+
+function updateActiveServoUI() {
+  SERVOS.forEach(s => {
+    const row = document.getElementById("sv-row-" + s.id);
+    if (row) row.classList.toggle("active", s.id === activeServoId);
+  });
+}
+
+function selectServoByKey(key) {
+  const servo = SERVOS.find(s => s.key === key);
+  if (!servo) return false;
+  activeServoId = servo.id;
+  updateActiveServoUI();
+  log("Servo selected: " + servo.name + " (" + servo.key.toUpperCase() + ")", "info");
+  return true;
+}
+
+function nudgeActiveServo(delta) {
+  if (!activeServoId) return false;
+  setServoAngle(activeServoId, getServoAngle(activeServoId) + delta);
+  return true;
 }
 
 // ─── Update sliders from ANGLES: feedback ─────────────────────────────────────
@@ -1268,11 +1259,8 @@ function applyAngles(csv) {
     angles.push(v);
     const slider = document.getElementById("sv-slider-" + s.id);
     const label  = document.getElementById("sv-angle-"  + s.id);
-    if (!slider || !label) return;
-    // Only update if user isn't actively dragging (avoids fighting the slider)
-    if (document.activeElement !== slider) {
-      slider.value = v;
-    }
+    if (slider) slider.value = v;
+    if (!label) return;
     label.textContent = v + "°";
     label.classList.toggle("live", true);
   });
@@ -1285,7 +1273,7 @@ function applyAngles(csv) {
 
 // ─── Gear UI build ────────────────────────────────────────────────────────────
 function buildGearUI() {
-  // Gear pips in footer
+  // Gear pips in left panel
   const gd = document.getElementById("gear-display");
   gd.innerHTML = "";
   for (let i = 0; i < GEARS.length; i++) {
@@ -1300,28 +1288,11 @@ function buildGearUI() {
   lbl.className = "gear-label";
   lbl.textContent = "Gear";
   gd.appendChild(lbl);
-
-  // Gear speed list in left panel
-  const gs = document.getElementById("gear-speeds");
-  gs.innerHTML = "";
-  for (let i = 0; i < GEARS.length; i++) {
-    const row = document.createElement("div");
-    row.className = "gear-row" + (i === gear ? " current" : "");
-    row.id = "grow-" + i;
-    const pct = (GEARS[i] / MAX_RPM * 100).toFixed(0);
-    row.innerHTML = `
-      <div class="gear-num">${i+1}</div>
-      <div class="gear-bar-bg"><div class="gear-bar-fg" style="width:${pct}%"></div></div>
-      <div class="gear-spd">${GEARS[i]} rpm</div>`;
-    gs.appendChild(row);
-  }
 }
 
 function updateGearUI() {
   for (let i = 0; i < GEARS.length; i++) {
     document.getElementById("gpip-" + i).className = "gear-pip" + (i === gear ? " active" : "");
-    const gr = document.getElementById("grow-" + i);
-    gr.className = "gear-row" + (i === gear ? " current" : "");
   }
 }
 
@@ -1847,6 +1818,15 @@ let autoBraked = false;  // true when auto-brake has engaged (separate from manu
 document.addEventListener("keydown", e => {
   if (e.target.tagName === "INPUT") return;
   const k = e.key.toLowerCase();
+  if (selectServoByKey(k)) { e.preventDefault(); return; }
+  if (k === "+" || k === "=") {
+    if (nudgeActiveServo(SERVO_STEP)) e.preventDefault();
+    return;
+  }
+  if (k === "-" || k === "_") {
+    if (nudgeActiveServo(-SERVO_STEP)) e.preventDefault();
+    return;
+  }
   let moved = false;
   if (k === "w") { keys.w = true; setKey("w", true); moved = true; }
   if (k === "a") { keys.a = true; setKey("a", true); moved = true; }
@@ -1862,7 +1842,7 @@ document.addEventListener("keydown", e => {
     }
   }
   if (k === "g") { gear = (gear + 1) % GEARS.length; updateGearUI(); sendMotionNow(); log("Gear " + (gear+1) + " — " + GEARS[gear] + " RPM max"); }
-  if (k === "l") { toggleLock(); }
+  if (k === "escape") { activeServoId = null; updateActiveServoUI(); }
   if (["w","a","s","d"].includes(k)) e.preventDefault();
 });
 
