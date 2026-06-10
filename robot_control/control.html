@@ -1060,9 +1060,9 @@
           <div class="sim-init-label">Arm2</div>
           <input type="number" id="sim-init-arm2-cur" min="0" max="180" step="1">
           <input type="number" id="sim-init-arm2-tgt" min="0" max="180" step="1">
-          <div class="sim-init-label">Arm3</div>
-          <input type="number" id="sim-init-arm3-cur" min="0" max="180" step="1">
-          <input type="number" id="sim-init-arm3-tgt" min="0" max="180" step="1">
+          <div class="sim-init-label">Extend</div>
+          <input type="number" id="sim-init-extend-cur" min="0" max="180" step="1">
+          <input type="number" id="sim-init-extend-tgt" min="0" max="180" step="1">
           <div class="sim-init-label">Arm4</div>
           <input type="number" id="sim-init-arm4-cur" min="0" max="180" step="1">
           <input type="number" id="sim-init-arm4-tgt" min="0" max="180" step="1">
@@ -1102,11 +1102,11 @@
           <input type="number" id="cal-arm2-n"     step="1"   min="-360" max="360">
           <input type="number" id="cal-arm2-dir"   step="1"   min="-1"   max="1">
           <input type="number" id="cal-arm2-scale" step="0.01" min="-10" max="10">
-          <!-- arm3 -->
-          <div class="sim-cal-label">Arm3</div>
-          <input type="number" id="cal-arm3-n"     step="1"   min="-360" max="360">
-          <input type="number" id="cal-arm3-dir"   step="1"   min="-1"   max="1">
-          <input type="number" id="cal-arm3-scale" step="0.01" min="-10" max="10">
+          <!-- extend -->
+          <div class="sim-cal-label">Extend</div>
+          <input type="number" id="cal-extend-n"     step="1"   min="-360" max="360">
+          <input type="number" id="cal-extend-dir"   step="1"   min="-1"   max="1">
+          <input type="number" id="cal-extend-scale" step="0.01" min="-10" max="10">
           <!-- arm4 -->
           <div class="sim-cal-label">Arm4</div>
           <input type="number" id="cal-arm4-n"     step="1"   min="-360" max="360">
@@ -1142,7 +1142,7 @@ const THRESHOLDS = {
 
 // ─── Sim ──────────────────────────────────────────────────────────────────────
 // Maps SERVOS index → sim servo key (matches IDX_TO_KEY in index.html)
-const SIM_KEYS = ['front','back','arm1','arm2','arm3','arm4','arm5','gripper'];
+const SIM_KEYS = ['front','back','arm1','arm2','extend','arm4','arm5','gripper'];
 
 let simFromUDPS = false;  // if true, use ANGLES: feedback; else use slider positions
 
@@ -1152,7 +1152,7 @@ const SIM_INIT = {
   back:    { cur: 96,  tgt: 96  },
   arm1:    { cur: 175, tgt: 175 },
   arm2:    { cur: 30,  tgt: 30  },
-  arm3:    { cur: 0,   tgt: 0   },
+  extend:  { cur: 0,   tgt: 0   },
   arm4:    { cur: 60,  tgt: 60  },
   arm5:    { cur: 110, tgt: 110 },
   gripper: { cur: 90,  tgt: 90  },
@@ -1164,7 +1164,7 @@ const SIM_CAL = {
   back:    { n: 96,  dir: 1,  scale: 0.85 },
   arm1:    { n: 175, dir: 1,  scale: 1.2  },
   arm2:    { n: 30,  dir: 1,  scale: 1.5  },
-  arm3:    { n: 90,  dir: -1, scale: 1.0  },
+  extend:  { n: 0,   dir: -1, scale: 1.0  },
   arm4:    { n: 60,  dir: -1, scale: 1.0  },
   arm5:    { n: 90,  dir: 1,  scale: 1.0  },
   gripper: { n: 90,  dir: 1,  scale: 1.0  },
@@ -1212,9 +1212,9 @@ const SERVOS = [
   { id: 2, name: "Back Flip",  min:  30, max: 150, home:  90 },
   { id: 3, name: "Shoulder",   min:   0, max: 180, home:  90 },
   { id: 4, name: "Elbow",      min:  25, max: 150, home:  25 },
-  { id: 5, name: "Wrist",      min:   0, max: 180, home:  20 },
-  { id: 6, name: "Wrist Roll", min:   0, max: 180, home:  85 },
-  { id: 7, name: "Tool",       min:   0, max: 180, home: 122 },
+  { id: 5, name: "Extend",     min:   0, max: 180, home:  20 },
+  { id: 6, name: "Wrist",     min:   0, max: 180, home:  85 },
+  { id: 7, name: "Wrist Roll", min:   0, max: 180, home: 122 },
   { id: 8, name: "Gripper",    min:   0, max: 180, home:  90 },
 ];
 
@@ -1470,7 +1470,7 @@ function loadParams() {
         if (tgtEl) tgtEl.value = SIM_INIT[k].tgt;
       });
       // Populate sim cal fields
-      const calKeys = ['front','back','arm1','arm2','arm3','arm4','gripper'];
+      const calKeys = ['front','back','arm1','arm2','extend','arm4','gripper'];
       calKeys.forEach(k => {
         const nEl     = document.getElementById("cal-" + k + "-n");
         const dirEl   = document.getElementById("cal-" + k + "-dir");
@@ -1513,7 +1513,7 @@ function saveParams() {
   });
 
   // Update SIM_CAL from form
-  const calKeys = ['front','back','arm1','arm2','arm3','arm4','gripper'];
+  const calKeys = ['front','back','arm1','arm2','extend','arm4','gripper'];
   calKeys.forEach(k => {
     const nEl     = document.getElementById("cal-" + k + "-n");
     const dirEl   = document.getElementById("cal-" + k + "-dir");
@@ -1558,7 +1558,7 @@ function resetParams() {
         back:    { cur: 96,  tgt: 96  },
         arm1:    { cur: 175, tgt: 175 },
         arm2:    { cur: 30,  tgt: 30  },
-        arm3:    { cur: 0,   tgt: 0   },
+        extend:  { cur: 0,   tgt: 0   },
         arm4:    { cur: 60,  tgt: 60  },
         arm5:    { cur: 110, tgt: 110 },
         gripper: { cur: 90,  tgt: 90  },
@@ -1568,7 +1568,7 @@ function resetParams() {
         back:    { n: 96,  dir: 1,  scale: 0.85 },
         arm1:    { n: 175, dir: 1,  scale: 1.2  },
         arm2:    { n: 30,  dir: 1,  scale: 1.5  },
-        arm3:    { n: 90,  dir: -1, scale: 1.0  },
+        extend:  { n: 0,   dir: -1, scale: 1.0  },
         arm4:    { n: 60,  dir: -1, scale: 1.0  },
         arm5:    { n: 90,  dir: 1,  scale: 1.0  },
         gripper: { n: 90,  dir: 1,  scale: 1.0  },
