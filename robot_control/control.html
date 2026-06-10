@@ -1077,7 +1077,7 @@
         <div>A/B/X/Y postures</div>
       </div>
     </div>
-    <div id="avatar-placeholder" style="display:none">Avatar mode — coming soon</div>
+    <div id="avatar-placeholder" style="display:none">Avatar arm → Shoulder / Elbow / Extend · keyboard still active</div>
   </div>
 
   <div id="footer-right">
@@ -2214,6 +2214,13 @@ function connectWS(silent) {
         return;
       }
       const obj = JSON.parse(e.data);
+      // Avatar arm echo: update slider/label + 3D sim without re-sending to server.
+      if (obj.cmd === "servo") { setServoAngle(obj.id, obj.angle, false); return; }
+      if (obj.cmd === "avatar_status") {
+        const el = document.getElementById("avatar-placeholder");
+        if (el && controlMode === "avatar") el.textContent = obj.text;
+        return;
+      }
       if (obj.T === 3) updateMotor(obj);
       else if (obj.T === 21) log("[ESP32] " + obj.info);
     } catch(_) {}
@@ -2418,6 +2425,8 @@ function setControlMode(mode) {
   ["w","a","s","d"].forEach(k => setKey(k, false));
   gpPrev = {};
   sendMotionNow();
+  // Start/stop the server-side avatar arm bridge as we enter/leave avatar mode.
+  send({ cmd: "avatar", state: mode === "avatar" ? 1 : 0 });
   updateModeUI();
   saveSettings();
   log("Control mode: " + mode, "info");
@@ -2433,6 +2442,10 @@ function updateModeUI() {
   show("kb-visual", controlMode === "keyboard");
   show("gamepad-status", controlMode === "controller");
   show("avatar-placeholder", controlMode === "avatar");
+  if (controlMode === "avatar") {
+    const el = document.getElementById("avatar-placeholder");
+    if (el) el.textContent = "Avatar arm → Shoulder / Elbow / Extend · keyboard still active";
+  }
   if (controlMode === "controller") updateGamepadStatusUI();
 }
 

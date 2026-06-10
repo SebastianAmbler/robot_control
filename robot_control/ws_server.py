@@ -20,6 +20,12 @@ import mimetypes
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, unquote
 
+try:
+    import serial
+    import serial.tools.list_ports
+except ImportError:
+    serial = None   # Avatar mode unavailable until `pip install pyserial`
+
 # ─── Config ───────────────────────────────────────────────────────────────────
 PI_IP         = "192.168.1.101"   # <-- SET THIS to your Pi's IP address
 UDP_CMD_PORT  = 3390              # port esp32_bridge listens on
@@ -29,6 +35,27 @@ UDP_SERVO_PORT = 3391             # port UDPS.py listens on for servo JSON packe
 WS_HOST       = "0.0.0.0"
 WS_PORT       = 8765
 HTTP_PORT     = 8766              # HTTP server for settings file I/O
+
+# ─── Avatar mode config (ported from testcode2/avatar.py) ──────────────────────
+# A physical "avatar" arm (a Teensy exposing 3 potentiometers over USB serial)
+# drives servos 3/4/5 (Shoulder/Elbow/Extend). See testcode2/avatar.py for the
+# original standalone bridge — this is the same logic embedded in the server.
+AVATAR_PORT  = "COM3"     # fallback if auto-detect fails
+AVATAR_BAUD  = 115200
+SERVO_MARKER = 0xAA
+
+SERVO_MIN = [0,   30,  40,  30,  20,  70,  80,  35]
+SERVO_MAX = [180, 150, 165, 180, 180, 150, 180, 140]
+
+# 3 channels mapped to servo ids 3, 4, 5
+CALIB = [
+    dict(pot=0, sid=3, rev=False, in0=0,   in1=180, out0=40, out1=165, name='Arm1 shoulder'),
+    dict(pot=1, sid=4, rev=True,  in0=122, in1=180, out0=30, out1=150, name='Arm2 elbow'),
+    dict(pot=2, sid=5, rev=False, in0=0,   in1=180, out0=20, out1=180, name='Arm3 wrist'),
+]
+AVATAR_DEADBAND = 2
+AVATAR_NUM_POTS = len(CALIB)
+TEENSY_PINS     = [3, 4, 5]
 
 # Settings file location - use absolute path relative to this script
 SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
@@ -58,6 +85,9 @@ udp_sock.bind(("0.0.0.0", UDP_FB_PORT))
 udp_sock.settimeout(0.1)
 
 connected_clients = set()
+
+# Captured in main() so background threads can schedule coroutines on the loop.
+event_loop = None
 
 
 def load_settings():
@@ -218,6 +248,166 @@ async def broadcast(msg):
     connected_clients.difference_update(dead)
 
 
+# ─── Avatar bridge (ported from testcode2/avatar.py) ───────────────────────────
+def find_avatar_teensy():
+    """Auto-detect the avatar-arm Teensy by USB description."""
+    ports = serial.tools.list_ports.comports()
+    for p in ports:
+        desc = ((p.description or '') + (p.manufacturer or '')).lower()
+        if any(kw in desc for kw in ['teensy', 'usb serial', 'arduino']):
+            return p.device
+    return ports[0].device if len(ports) == 1 else None
+
+
+def parse_line(raw):
+    """Parse a serial line into a list of pot angles (0-180). See avatar.py."""
+    if raw.startswith(('ANGLES:', 'DATA:', '===')):
+        return None
+
+    # Format 2: D3=1770 D4=0 D5=1500
+    if '=' in raw and raw[0] in ('D', 'A'):
+        vals = {}
+        for part in raw.split():
+            if '=' in part:
+                try:
+                    k, v = part.split('=')
+                    vals[int(k[1:])] = int(v)
+                except Exception:
+                    pass
+        if vals:
+            result = []
+            for pin in TEENSY_PINS:
+                pw = vals.get(pin, 0)
+                result.append(90 if pw == 0 else
+                               max(0, min(180, int((pw - 1000) * 180 / 1000))))
+            return result
+
+    # Format 1: comma "90,145,60"
+    parts = raw.split(',')
+    if len(parts) >= AVATAR_NUM_POTS:
+        try:
+            vals = [int(p.strip()) for p in parts[:AVATAR_NUM_POTS]]
+            if all(0 <= v <= 180 for v in vals):
+                return vals
+        except Exception:
+            pass
+
+    return None
+
+
+def to_angle(val, c):
+    """Map a raw pot value to a clamped servo angle using a CALIB channel."""
+    ratio = (val - c['in0']) / max(1, c['in1'] - c['in0'])
+    ratio = max(0.0, min(1.0, ratio))
+    if c['rev']:
+        ratio = 1.0 - ratio
+    angle = c['out0'] + ratio * (c['out1'] - c['out0'])
+    idx   = c['sid'] - 1
+    return max(SERVO_MIN[idx], min(SERVO_MAX[idx], int(angle)))
+
+
+def avatar_status(text):
+    """Broadcast an avatar status line to all WS clients (UI placeholder)."""
+    if event_loop is not None and connected_clients:
+        asyncio.run_coroutine_threadsafe(
+            broadcast(json.dumps({"cmd": "avatar_status", "text": text})), event_loop
+        )
+
+
+class AvatarBridge:
+    """Reads the physical avatar arm and drives servos 3/4/5.
+
+    Started/stopped on demand when the UI enters/leaves Avatar mode. Sends servo
+    commands to the Pi over UDP (same path as cmd:"servo") and echoes each angle
+    back to WS clients so the sliders / 3D sim track the physical arm.
+    """
+
+    def __init__(self):
+        self._thread = None
+        self._stop = threading.Event()
+
+    @property
+    def running(self):
+        return self._thread is not None and self._thread.is_alive()
+
+    def start(self):
+        if self.running:
+            return
+        if serial is None:
+            print("[Avatar] pyserial not installed — run `pip install pyserial`")
+            avatar_status("Avatar unavailable — pyserial not installed")
+            return
+        self._stop.clear()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        self._stop.set()
+        # Thread is daemon and closes its own serial port on exit; no join needed.
+        self._thread = None
+
+    def _run(self):
+        port = None
+        try:
+            port = find_avatar_teensy()
+        except Exception as e:
+            print(f"[Avatar] Port scan failed: {e}")
+        if not port:
+            print(f"[Avatar] No Teensy auto-detected, trying {AVATAR_PORT}")
+            port = AVATAR_PORT
+
+        try:
+            t1 = serial.Serial(port, AVATAR_BAUD, timeout=1)
+        except Exception as e:
+            print(f"[Avatar] Could not open {port}: {e}")
+            avatar_status(f"Avatar arm not found ({port})")
+            return
+
+        print(f"[Avatar] Bridge running on {port} → servos 3/4/5 → Pi")
+        avatar_status(f"Avatar arm connected ({port}) → Shoulder / Elbow / Extend")
+        prev = {}
+        try:
+            while not self._stop.is_set():
+                try:
+                    raw = t1.readline().decode(errors='ignore').strip()
+                    if not raw:
+                        continue
+                    vals = parse_line(raw)
+                    if vals is None:
+                        continue
+                    for i, c in enumerate(CALIB):
+                        if i >= len(vals):
+                            continue
+                        angle = to_angle(vals[i], c)
+                        sid   = c['sid']
+                        if sid not in prev or abs(angle - prev[sid]) > AVATAR_DEADBAND:
+                            self._send_servo(sid, angle)
+                            prev[sid] = angle
+                except Exception as e:
+                    print(f"[Avatar] {e}")
+        finally:
+            try:
+                t1.close()
+            except Exception:
+                pass
+            print("[Avatar] Bridge stopped")
+            avatar_status("Avatar mode idle")
+
+    def _send_servo(self, sid, angle):
+        # 1) Drive the real servo via the Pi (same path as cmd:"servo").
+        payload = json.dumps({"cmd": "servo", "id": sid, "angle": angle}).encode()
+        udp_sock.sendto(bytes([SERVO_MARKER]) + payload, (PI_IP, UDP_SERVO_PORT))
+        # 2) Echo to UI clients so sliders / 3D sim follow the physical arm.
+        if event_loop is not None and connected_clients:
+            asyncio.run_coroutine_threadsafe(
+                broadcast(json.dumps({"cmd": "servo", "id": sid, "angle": angle})),
+                event_loop,
+            )
+
+
+avatar_bridge = AvatarBridge()
+
+
 async def handler(websocket):
     connected_clients.add(websocket)
     print(f"[WS] Client connected: {websocket.remote_address}")
@@ -252,16 +442,28 @@ async def handler(websocket):
                     }).encode()
                     udp_sock.sendto(bytes([0xAA]) + payload, (PI_IP, UDP_SERVO_PORT))
 
+                elif cmd == "avatar":
+                    state = int(obj.get("state", 0))
+                    if state:
+                        avatar_bridge.start()
+                    else:
+                        avatar_bridge.stop()
+
             except Exception as e:
                 print(f"[WS] Error handling message: {e}")
     finally:
         connected_clients.discard(websocket)
+        # Safety: release the avatar arm if no UI is left to drive it.
+        if not connected_clients:
+            avatar_bridge.stop()
         print(f"[WS] Client disconnected: {websocket.remote_address}")
 
 
 async def main():
+    global event_loop
     loop = asyncio.get_event_loop()
-    
+    event_loop = loop   # let background threads (UDP feedback, avatar) reach the loop
+
     # Start HTTP server in background thread
     http_thread = threading.Thread(target=run_http_server, daemon=True)
     http_thread.start()

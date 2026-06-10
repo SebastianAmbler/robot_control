@@ -168,8 +168,8 @@
     "buttons": {
       "dpadUp": 12,
       "dpadDown": 13,
-      "dpadLeft": 14,
-      "dpadRight": 15,
+      "dpadLeft": 15,
+      "dpadRight": 14,
       "lb": 4,
       "rb": 5,
       "lt": 6,
