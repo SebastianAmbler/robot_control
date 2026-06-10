@@ -162,7 +162,7 @@
     background: var(--surface);
     border-top: 1px solid var(--border);
     display: grid;
-    grid-template-columns: minmax(0, 320px) 1fr minmax(0, 200px);
+    grid-template-columns: minmax(0, 320px) 1fr minmax(0, 420px);
     align-items: stretch;
     padding: 0 16px;
     gap: 16px;
@@ -231,6 +231,67 @@
     border-color: var(--accent);
     color: var(--accent);
     box-shadow: 0 0 0 1px var(--accent2) inset;
+  }
+
+  /* ── Control mode toggle + gamepad status ── */
+  #mode-toggle {
+    background: transparent;
+    border: 1px solid var(--border2);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 10px;
+    padding: 6px 12px;
+    cursor: pointer;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  #mode-toggle:hover { border-color: var(--accent); color: var(--accent); }
+  #kb-visual {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    min-width: 0;
+  }
+  #gamepad-status {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+    min-width: 0;
+    overflow: hidden;
+  }
+  #gp-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--muted);
+    min-width: 0;
+  }
+  #gp-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--border2);
+    flex-shrink: 0;
+  }
+  #gp-dot.on { background: #00cc66; }
+  #gp-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .gp-hint {
+    font-size: 10px;
+    color: var(--muted);
+    text-align: center;
+    line-height: 1.8;
+  }
+  #avatar-placeholder {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
   }
 
   /* ── Speed / vector display ── */
@@ -426,10 +487,53 @@
   #footer-right {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: flex-start;
     gap: 12px;
     min-width: 0;
     overflow: hidden;
+  }
+  #posture-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+    flex: 1;
+  }
+  #posture-label {
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  #posture-buttons {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    min-width: 0;
+  }
+  .posture-btn {
+    height: 24px;
+    border: 1px solid var(--border2);
+    background: transparent;
+    color: var(--text);
+    font-size: 10px;
+    font-family: var(--mono);
+    cursor: pointer;
+    padding: 0 6px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .posture-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .posture-btn.active {
+    border-color: var(--ok);
+    color: var(--ok);
+    background: rgba(0,255,136,0.08);
   }
   #rpm-display {
     text-align: right;
@@ -688,6 +792,85 @@
   .param-btn:hover { border-color: var(--accent); color: var(--accent); }
   .param-btn.save:hover { border-color: var(--ok); color: var(--ok); }
 
+  .posture-param-wrap {
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+  .posture-param-grid {
+    display: grid;
+    grid-template-columns: 82px repeat(8, 54px);
+    gap: 6px;
+    align-items: center;
+    min-width: 562px;
+  }
+  .posture-param-head,
+  .posture-param-label {
+    font-size: 10px;
+    color: var(--muted);
+    font-family: var(--mono);
+  }
+  .posture-param-head {
+    text-align: center;
+    text-transform: uppercase;
+  }
+  .posture-param-label {
+    color: var(--text);
+    text-transform: capitalize;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .posture-param-grid input {
+    width: 54px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 4px 5px;
+  }
+  .posture-param-grid input:focus {
+    outline: none;
+    border-color: var(--accent2);
+  }
+
+  /* ── Controller parameter grid ── */
+  .ctl-btn-grid {
+    display: grid;
+    grid-template-columns: 1fr 56px 1fr 56px;
+    gap: 6px 10px;
+    align-items: center;
+  }
+  .ctl-btn-grid label {
+    font-size: 11px;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ctl-btn-grid input {
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 4px 5px;
+  }
+  .ctl-btn-grid input:focus { outline: none; border-color: var(--accent2); }
+  .param-row select {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 11px;
+    padding: 5px 8px;
+    outline: none;
+    min-width: 0;
+  }
+  .param-row select:focus { border-color: var(--accent2); }
+
   /* ── Sim section ── */
   #sim-section {
     flex-shrink: 0;
@@ -870,22 +1053,38 @@
   </div>
 
   <div id="footer-center">
-    <div id="wasd">
-      <div class="key-row"><div class="key" id="key-w">W</div></div>
-      <div class="key-row">
-        <div class="key" id="key-a">A</div>
-        <div class="key" id="key-s">S</div>
-        <div class="key" id="key-d">D</div>
+    <button id="mode-toggle" onclick="cycleControlMode()">⌨ Keyboard</button>
+    <div id="kb-visual">
+      <div id="wasd">
+        <div class="key-row"><div class="key" id="key-w">W</div></div>
+        <div class="key-row">
+          <div class="key" id="key-a">A</div>
+          <div class="key" id="key-s">S</div>
+          <div class="key" id="key-d">D</div>
+        </div>
       </div>
-    </div>
       <div style="font-size:10px; color:var(--muted); text-align:center; line-height:1.8;">
         <div>WASD  move</div>
         <div>G  gear up</div>
         <div>Y-L + / -  servo</div>
       </div>
+    </div>
+    <div id="gamepad-status" style="display:none">
+      <div id="gp-line"><span id="gp-dot"></span><span id="gp-name">No gamepad — press any button</span></div>
+      <div class="gp-hint">
+        <div>D-Pad move · R3 gear</div>
+        <div>RT/RB front flip · LT/LB back flip</div>
+        <div>A/B/X/Y postures</div>
+      </div>
+    </div>
+    <div id="avatar-placeholder" style="display:none">Avatar mode — coming soon</div>
   </div>
 
   <div id="footer-right">
+    <div id="posture-panel">
+      <div id="posture-label">Postures</div>
+      <div id="posture-buttons"></div>
+    </div>
     <div class="rpm-pair">
       <div class="rpm-col">
         <div class="rpm-label">L RPM</div>
@@ -997,6 +1196,13 @@
       </div>
 
       <div class="param-group">
+        <div class="param-group-label">Postures</div>
+        <div class="posture-param-wrap">
+          <div class="posture-param-grid" id="posture-param-grid"></div>
+        </div>
+      </div>
+
+      <div class="param-group">
         <div class="param-group-label">Sim — Initial Angles (cur / tgt)</div>
         <div class="sim-init-grid">
           <div class="sim-init-head">Servo</div>
@@ -1071,6 +1277,69 @@
           <input type="number" id="cal-gripper-n"     step="1"   min="-360" max="360">
           <input type="number" id="cal-gripper-dir"   step="1"   min="-1"   max="1">
           <input type="number" id="cal-gripper-scale" step="0.01" min="-10" max="10">
+        </div>
+      </div>
+
+      <div class="param-group">
+        <div class="param-group-label">Controller — Button Mapping (gamepad index)</div>
+        <div class="ctl-btn-grid">
+          <label>D-Pad ↑</label><input type="number" id="ctl-btn-dpadUp" min="0" max="31" step="1">
+          <label>D-Pad ↓</label><input type="number" id="ctl-btn-dpadDown" min="0" max="31" step="1">
+          <label>D-Pad ←</label><input type="number" id="ctl-btn-dpadLeft" min="0" max="31" step="1">
+          <label>D-Pad →</label><input type="number" id="ctl-btn-dpadRight" min="0" max="31" step="1">
+          <label>LT / L2</label><input type="number" id="ctl-btn-lt" min="0" max="31" step="1">
+          <label>LB / L1</label><input type="number" id="ctl-btn-lb" min="0" max="31" step="1">
+          <label>RT / R2</label><input type="number" id="ctl-btn-rt" min="0" max="31" step="1">
+          <label>RB / R1</label><input type="number" id="ctl-btn-rb" min="0" max="31" step="1">
+          <label>R3 (stick press)</label><input type="number" id="ctl-btn-r3" min="0" max="31" step="1">
+          <label>A / Cross</label><input type="number" id="ctl-btn-a" min="0" max="31" step="1">
+          <label>B / Circle</label><input type="number" id="ctl-btn-b" min="0" max="31" step="1">
+          <label>X / Square</label><input type="number" id="ctl-btn-x" min="0" max="31" step="1">
+          <label>Y / Triangle</label><input type="number" id="ctl-btn-y" min="0" max="31" step="1">
+        </div>
+      </div>
+
+      <div class="param-group">
+        <div class="param-group-label">Controller — Flippers &amp; Input</div>
+        <div class="param-row">
+          <label>Flipper °/tick</label>
+          <input type="number" id="ctl-flip-step" min="0.5" max="20" step="0.5">
+        </div>
+        <div class="param-row">
+          <label>Front raise dir</label>
+          <select id="ctl-front-sign"><option value="1">+ (angle up)</option><option value="-1">− (angle down)</option></select>
+        </div>
+        <div class="param-row">
+          <label>Back raise dir</label>
+          <select id="ctl-back-sign"><option value="1">+ (angle up)</option><option value="-1">− (angle down)</option></select>
+        </div>
+        <div class="param-row">
+          <label>Trigger threshold</label>
+          <input type="number" id="ctl-trig-thresh" min="0.05" max="0.95" step="0.05">
+        </div>
+        <div class="param-row">
+          <label>Stick deadzone</label>
+          <input type="number" id="ctl-deadzone" min="0" max="0.9" step="0.05">
+        </div>
+      </div>
+
+      <div class="param-group">
+        <div class="param-group-label">Controller — Face Button Postures</div>
+        <div class="param-row">
+          <label>A / Cross</label>
+          <select id="ctl-posture-a"></select>
+        </div>
+        <div class="param-row">
+          <label>B / Circle</label>
+          <select id="ctl-posture-b"></select>
+        </div>
+        <div class="param-row">
+          <label>X / Square</label>
+          <select id="ctl-posture-x"></select>
+        </div>
+        <div class="param-row">
+          <label>Y / Triangle</label>
+          <select id="ctl-posture-y"></select>
         </div>
       </div>
     </div>
@@ -1173,6 +1442,60 @@ const SERVOS = [
 ];
 const SERVO_STEP = 5;
 let activeServoId = null;
+const POSTURE_NAMES = ['home','stair','ramp','fold','giraffe','finish','backramp'];
+const DEFAULT_POSTURE_ANGLES = [90, 90, 90, 90, 90, 90, 90, 90];
+const POSTURES = Object.fromEntries(
+  POSTURE_NAMES.map(name => [name, DEFAULT_POSTURE_ANGLES.slice()])
+);
+let activePostureName = null;
+
+// ─── Controller (gamepad) config ──────────────────────────────────────────────
+// Default button indices follow the W3C "standard" gamepad mapping, which both
+// Xbox and PS4 (DualShock) pads expose in modern browsers. Remappable in
+// Parameters for pads that report a non-standard mapping.
+const CONTROL_MODES = ["keyboard", "controller", "avatar"];
+const MODE_LABELS = { keyboard: "⌨ Keyboard", controller: "🎮 Controller", avatar: "👤 Avatar" };
+let controlMode  = "keyboard";
+let gamepadIndex = null;
+let gpPrev = {};   // previous pressed state per logical button (edge detection)
+
+const FLIPPER_FRONT_ID = 1;  // SERVOS id "Front Flip"
+const FLIPPER_BACK_ID  = 2;  // SERVOS id "Back Flip"
+
+const CONTROLLER_DEFAULTS = {
+  buttons: { dpadUp: 12, dpadDown: 13, dpadLeft: 14, dpadRight: 15,
+             lb: 4, rb: 5, lt: 6, rt: 7, r3: 11, a: 0, b: 1, x: 2, y: 3 },
+  posturesByButton: { a: "home", b: "fold", x: "stair", y: "finish" },
+  flipper: { stepDeg: 2, frontRaiseSign: 1, backRaiseSign: 1 },
+  triggerThreshold: 0.5,
+  deadzone: 0.15,
+};
+const CONTROLLER = JSON.parse(JSON.stringify(CONTROLLER_DEFAULTS));
+
+function mergeControllerSettings(c) {
+  if (!c) return;
+  if (c.buttons) {
+    Object.keys(CONTROLLER.buttons).forEach(k => {
+      const v = parseInt(c.buttons[k]);
+      if (!isNaN(v) && v >= 0) CONTROLLER.buttons[k] = v;
+    });
+  }
+  if (c.posturesByButton) {
+    Object.keys(CONTROLLER.posturesByButton).forEach(k => {
+      if (POSTURE_NAMES.includes(c.posturesByButton[k])) CONTROLLER.posturesByButton[k] = c.posturesByButton[k];
+    });
+  }
+  if (c.flipper) {
+    const step = parseFloat(c.flipper.stepDeg);
+    if (!isNaN(step) && step > 0) CONTROLLER.flipper.stepDeg = step;
+    if (c.flipper.frontRaiseSign === 1 || c.flipper.frontRaiseSign === -1) CONTROLLER.flipper.frontRaiseSign = c.flipper.frontRaiseSign;
+    if (c.flipper.backRaiseSign  === 1 || c.flipper.backRaiseSign  === -1) CONTROLLER.flipper.backRaiseSign  = c.flipper.backRaiseSign;
+  }
+  const tt = parseFloat(c.triggerThreshold);
+  if (!isNaN(tt) && tt > 0 && tt < 1) CONTROLLER.triggerThreshold = tt;
+  const dz = parseFloat(c.deadzone);
+  if (!isNaN(dz) && dz >= 0 && dz < 1) CONTROLLER.deadzone = dz;
+}
 
 // ─── Servo UI build ───────────────────────────────────────────────────────────
 function buildServoUI() {
@@ -1224,6 +1547,123 @@ function getServoAngle(id) {
   const value = document.getElementById("sv-slider-" + id);
   const v = value ? parseInt(value.value) : NaN;
   return isNaN(v) ? (s ? s.home : 90) : v;
+}
+
+function postureLabel(name) {
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+function clampServoAngleByIndex(index, angle) {
+  const servo = SERVOS[index];
+  const fallback = DEFAULT_POSTURE_ANGLES[index] ?? 90;
+  const numeric = angle === "" || angle === null || angle === undefined ? NaN : Number(angle);
+  const raw = Number.isFinite(numeric) ? numeric : fallback;
+  const rounded = Math.round(raw);
+  if (!servo) return Math.max(0, Math.min(180, rounded));
+  return Math.max(servo.min, Math.min(servo.max, rounded));
+}
+
+function clampPostureAngles(name, angles) {
+  const source = Array.isArray(angles) ? angles : POSTURES[name];
+  return SERVOS.map((_, i) => clampServoAngleByIndex(i, source?.[i]));
+}
+
+function createDefaultPostures() {
+  return Object.fromEntries(
+    POSTURE_NAMES.map(name => [name, DEFAULT_POSTURE_ANGLES.slice()])
+  );
+}
+
+function loadPostures(settings) {
+  const saved = settings?.postures || {};
+  POSTURE_NAMES.forEach(name => {
+    POSTURES[name] = clampPostureAngles(name, Array.isArray(saved[name]) ? saved[name] : DEFAULT_POSTURE_ANGLES);
+  });
+}
+
+function updatePostureUI() {
+  POSTURE_NAMES.forEach(name => {
+    const btn = document.getElementById("posture-btn-" + name);
+    if (btn) btn.classList.toggle("active", name === activePostureName);
+  });
+}
+
+function buildPostureUI() {
+  const container = document.getElementById("posture-buttons");
+  if (!container) return;
+  container.innerHTML = "";
+  POSTURE_NAMES.forEach(name => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "posture-btn";
+    btn.id = "posture-btn-" + name;
+    btn.textContent = postureLabel(name);
+    btn.title = "Apply " + postureLabel(name) + " posture";
+    btn.addEventListener("click", () => applyPosture(name));
+    container.appendChild(btn);
+  });
+  updatePostureUI();
+}
+
+function buildPostureParamUI() {
+  const grid = document.getElementById("posture-param-grid");
+  if (!grid) return;
+  grid.innerHTML = "";
+
+  const blank = document.createElement("div");
+  blank.className = "posture-param-head";
+  grid.appendChild(blank);
+  SERVOS.forEach(s => {
+    const head = document.createElement("div");
+    head.className = "posture-param-head";
+    head.textContent = "S" + s.id;
+    head.title = s.name;
+    grid.appendChild(head);
+  });
+
+  POSTURE_NAMES.forEach(name => {
+    const label = document.createElement("div");
+    label.className = "posture-param-label";
+    label.textContent = postureLabel(name);
+    grid.appendChild(label);
+
+    const angles = clampPostureAngles(name, POSTURES[name]);
+    POSTURES[name] = angles;
+    SERVOS.forEach((servo, i) => {
+      const input = document.createElement("input");
+      input.type = "number";
+      input.id = `posture-${name}-${i}`;
+      input.min = servo.min;
+      input.max = servo.max;
+      input.step = 1;
+      input.value = angles[i];
+      input.title = `${postureLabel(name)} ${servo.name}`;
+      grid.appendChild(input);
+    });
+  });
+}
+
+function readPosturesFromParams() {
+  POSTURE_NAMES.forEach(name => {
+    const values = SERVOS.map((_, i) => {
+      const input = document.getElementById(`posture-${name}-${i}`);
+      return input ? input.value : POSTURES[name]?.[i];
+    });
+    POSTURES[name] = clampPostureAngles(name, values);
+  });
+}
+
+function applyPosture(name) {
+  if (!POSTURE_NAMES.includes(name)) return;
+  const angles = clampPostureAngles(name, POSTURES[name]);
+  POSTURES[name] = angles;
+  activePostureName = name;
+  updatePostureUI();
+  angles.forEach((angle, i) => {
+    const servo = SERVOS[i];
+    if (servo) setServoAngle(servo.id, angle, true);
+  });
+  log("Posture applied: " + postureLabel(name), "info");
 }
 
 function updateActiveServoUI() {
@@ -1306,6 +1746,7 @@ function saveSettings() {
     autoConnect: document.getElementById("auto-connect-chk").checked,
     autoBrake:   document.getElementById("auto-brake-chk").checked,
     simFromUDPS: document.getElementById("sim-from-udps-chk").checked,
+    controlMode: controlMode,
   }));
 }
 
@@ -1326,6 +1767,10 @@ function loadSettings() {
       tag.textContent = "udps";
       tag.classList.add("live");
     }
+    if (CONTROL_MODES.includes(s.controlMode)) {
+      controlMode = s.controlMode;
+    }
+    updateModeUI();
     if (s.autoConnect) {
       document.getElementById("auto-connect-chk").checked = true;
       autoConnect = true;
@@ -1385,6 +1830,53 @@ function paramsOverlayClick(e) {
   if (e.target === document.getElementById("params-overlay")) closeParams();
 }
 
+function buildControllerParamUI() {
+  Object.keys(CONTROLLER.posturesByButton).forEach(btn => {
+    const sel = document.getElementById("ctl-posture-" + btn);
+    if (!sel) return;
+    sel.innerHTML = "";
+    POSTURE_NAMES.forEach(name => {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = postureLabel(name);
+      sel.appendChild(opt);
+    });
+  });
+}
+
+function populateControllerParams() {
+  buildControllerParamUI();
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  Object.keys(CONTROLLER.buttons).forEach(k => set("ctl-btn-" + k, CONTROLLER.buttons[k]));
+  set("ctl-flip-step",   CONTROLLER.flipper.stepDeg);
+  set("ctl-front-sign",  CONTROLLER.flipper.frontRaiseSign);
+  set("ctl-back-sign",   CONTROLLER.flipper.backRaiseSign);
+  set("ctl-trig-thresh", CONTROLLER.triggerThreshold);
+  set("ctl-deadzone",    CONTROLLER.deadzone);
+  Object.keys(CONTROLLER.posturesByButton).forEach(btn => set("ctl-posture-" + btn, CONTROLLER.posturesByButton[btn]));
+}
+
+function readControllerFromParams() {
+  Object.keys(CONTROLLER.buttons).forEach(k => {
+    const v = parseInt(document.getElementById("ctl-btn-" + k)?.value);
+    if (!isNaN(v) && v >= 0) CONTROLLER.buttons[k] = v;
+  });
+  const step = parseFloat(document.getElementById("ctl-flip-step")?.value);
+  if (!isNaN(step) && step > 0) CONTROLLER.flipper.stepDeg = step;
+  const fs = parseInt(document.getElementById("ctl-front-sign")?.value);
+  if (fs === 1 || fs === -1) CONTROLLER.flipper.frontRaiseSign = fs;
+  const bs = parseInt(document.getElementById("ctl-back-sign")?.value);
+  if (bs === 1 || bs === -1) CONTROLLER.flipper.backRaiseSign = bs;
+  const tt = parseFloat(document.getElementById("ctl-trig-thresh")?.value);
+  if (!isNaN(tt) && tt > 0 && tt < 1) CONTROLLER.triggerThreshold = tt;
+  const dz = parseFloat(document.getElementById("ctl-deadzone")?.value);
+  if (!isNaN(dz) && dz >= 0 && dz < 1) CONTROLLER.deadzone = dz;
+  Object.keys(CONTROLLER.posturesByButton).forEach(btn => {
+    const v = document.getElementById("ctl-posture-" + btn)?.value;
+    if (POSTURE_NAMES.includes(v)) CONTROLLER.posturesByButton[btn] = v;
+  });
+}
+
 function loadParams() {
   // Load from file-based API
   fetch("http://localhost:8766/api/settings")
@@ -1425,6 +1917,7 @@ function loadParams() {
           }
         });
       }
+      loadPostures(p);
       // Populate form fields
       for (let i = 0; i < GEARS.length; i++) {
         document.getElementById("gear-" + i).value = GEARS[i];
@@ -1450,8 +1943,15 @@ function loadParams() {
         if (dirEl)   dirEl.value   = SIM_CAL[k].dir;
         if (scaleEl) scaleEl.value = SIM_CAL[k].scale;
       });
+      mergeControllerSettings(p.controller);
+      populateControllerParams();
+      buildPostureParamUI();
     })
-    .catch(e => log("Error loading parameters: " + e.message, "warn"));
+    .catch(e => {
+      populateControllerParams();
+      buildPostureParamUI();
+      log("Error loading parameters: " + e.message, "warn");
+    });
 }
 
 function saveParams() {
@@ -1474,6 +1974,9 @@ function saveParams() {
   
   const tmpCrit = parseFloat(document.getElementById("tmp-crit").value);
   if (!isNaN(tmpCrit) && tmpCrit >= 0) THRESHOLDS.tmp.crit = tmpCrit;
+
+  readPosturesFromParams();
+  readControllerFromParams();
 
   // Update SIM_INIT from form
   SIM_KEYS.forEach(k => {
@@ -1503,11 +2006,14 @@ function saveParams() {
       thresholds: THRESHOLDS,
       simInit: SIM_INIT,
       simCal: SIM_CAL,
+      postures: POSTURES,
+      controller: CONTROLLER,
     })
   })
   .then(r => r.json())
   .then(data => {
     buildGearUI();
+    buildPostureUI();
     // Push updated CAL to iframe immediately
     postSimState(simAngles);
     log("Parameters saved: " + GEARS.map((g,i) => `G${i+1}=${g}`).join("  "), "info");
@@ -1544,8 +2050,10 @@ function resetParams() {
         arm5:    { n: 90,  dir: 1,  scale: 1.0  },
         gripper: { n: 90,  dir: 1,  scale: 1.0  },
       },
+      postures: createDefaultPostures(),
+      controller: JSON.parse(JSON.stringify(CONTROLLER_DEFAULTS)),
     };
-    
+
     fetch("http://localhost:8766/api/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1560,7 +2068,12 @@ function resetParams() {
         if (defaults.simInit[k]) { SIM_INIT[k].cur = defaults.simInit[k].cur; SIM_INIT[k].tgt = defaults.simInit[k].tgt; }
         if (defaults.simCal[k])  { SIM_CAL[k].n = defaults.simCal[k].n; SIM_CAL[k].dir = defaults.simCal[k].dir; SIM_CAL[k].scale = defaults.simCal[k].scale; }
       });
+      loadPostures(defaults);
+      mergeControllerSettings(defaults.controller);
+      populateControllerParams();
       buildGearUI();
+      buildPostureUI();
+      buildPostureParamUI();
       postSimState(simAngles);
       log("Parameters reset to defaults", "info");
       closeParams();
@@ -1607,9 +2120,12 @@ function loadParamSettings() {
           }
         });
       }
+      loadPostures(p);
+      mergeControllerSettings(p.controller);
       // Rebuild UI with loaded settings
       buildGearUI();
       buildServoUI();
+      buildPostureUI();
       log("Gears: " + GEARS.map((g,i) => `G${i+1}=${g}`).join("  "));
       // Push initial sim state after a short delay (give iframe time to load)
       setTimeout(() => pushSimFromSliders(), 1500);
@@ -1619,6 +2135,7 @@ function loadParamSettings() {
       // Build UI with defaults as fallback
       buildGearUI();
       buildServoUI();
+      buildPostureUI();
       log("Gears: " + GEARS.map((g,i) => `G${i+1}=${g}`).join("  "));
       setTimeout(() => pushSimFromSliders(), 1500);
     });
@@ -1815,6 +2332,36 @@ function sendMotionNow() {
 // Send immediately on any state change — bypasses buffer check
 let autoBraked = false;  // true when auto-brake has engaged (separate from manual isLocked)
 
+function cycleGear() {
+  gear = (gear + 1) % GEARS.length;
+  updateGearUI();
+  sendMotionNow();
+  log("Gear " + (gear+1) + " — " + GEARS[gear] + " RPM max");
+}
+
+// Shared by keyboard and gamepad: call after `keys` changes.
+// Releases the auto-brake when movement starts, engages it when all input stops.
+function applyMoveChange() {
+  const anyKey = keys.w || keys.a || keys.s || keys.d;
+  if (anyKey) {
+    if (autoBrake && autoBraked && !isLocked) {
+      autoBraked = false;
+      send({ cmd: "lock", state: 0 });   // release brake
+      setTimeout(sendMotionNow, 80);     // give ESP32 time to switch back to speed mode
+    } else {
+      sendMotionNow();
+    }
+  } else {
+    if (autoBrake && !isLocked) {
+      autoBraked = true;
+      send({ cmd: "lock", state: 1 });
+      updateRPMDisplay(0, 0);
+    } else {
+      sendMotionNow();
+    }
+  }
+}
+
 document.addEventListener("keydown", e => {
   if (e.target.tagName === "INPUT") return;
   const k = e.key.toLowerCase();
@@ -1827,42 +2374,27 @@ document.addEventListener("keydown", e => {
     if (nudgeActiveServo(-SERVO_STEP)) e.preventDefault();
     return;
   }
+  if (k === "escape") { activeServoId = null; updateActiveServoUI(); }
+  if (controlMode !== "keyboard") return;  // WASD/gear only in keyboard mode
   let moved = false;
   if (k === "w") { keys.w = true; setKey("w", true); moved = true; }
   if (k === "a") { keys.a = true; setKey("a", true); moved = true; }
   if (k === "s") { keys.s = true; setKey("s", true); moved = true; }
   if (k === "d") { keys.d = true; setKey("d", true); moved = true; }
-  if (moved) {
-    if (autoBrake && autoBraked && !isLocked) {
-      autoBraked = false;
-      send({ cmd: "lock", state: 0 });   // release brake
-      setTimeout(sendMotionNow, 80);     // give ESP32 time to switch back to speed mode
-    } else {
-      sendMotionNow();
-    }
-  }
-  if (k === "g") { gear = (gear + 1) % GEARS.length; updateGearUI(); sendMotionNow(); log("Gear " + (gear+1) + " — " + GEARS[gear] + " RPM max"); }
-  if (k === "escape") { activeServoId = null; updateActiveServoUI(); }
+  if (moved) applyMoveChange();
+  if (k === "g") cycleGear();
   if (["w","a","s","d"].includes(k)) e.preventDefault();
 });
 
 document.addEventListener("keyup", e => {
+  if (controlMode !== "keyboard") return;
   const k = e.key.toLowerCase();
   let moved = false;
   if (k === "w") { keys.w = false; setKey("w", false); moved = true; }
   if (k === "a") { keys.a = false; setKey("a", false); moved = true; }
   if (k === "s") { keys.s = false; setKey("s", false); moved = true; }
   if (k === "d") { keys.d = false; setKey("d", false); moved = true; }
-  if (moved) {
-    const anyKey = keys.w || keys.a || keys.s || keys.d;
-    if (autoBrake && !anyKey && !isLocked) {
-      autoBraked = true;
-      send({ cmd: "lock", state: 1 });
-      updateRPMDisplay(0, 0);
-    } else {
-      sendMotionNow();
-    }
-  }
+  if (moved) applyMoveChange();
 });
 
 // Keepalive: self-throttles via bufferedAmount guard in sendMotionNow
@@ -1871,6 +2403,132 @@ setInterval(() => {
   const anyKey = keys.w || keys.a || keys.s || keys.d;
   if (anyKey && Date.now() - lastSentMs >= KEEPALIVE_MS) sendMotionNow();
 }, 50);
+
+// ─── Control mode toggle ──────────────────────────────────────────────────────
+function cycleControlMode() {
+  const i = CONTROL_MODES.indexOf(controlMode);
+  setControlMode(CONTROL_MODES[(i + 1) % CONTROL_MODES.length]);
+}
+
+function setControlMode(mode) {
+  if (!CONTROL_MODES.includes(mode)) mode = "keyboard";
+  controlMode = mode;
+  // Safety stop: clear any held movement input from the previous mode
+  keys.w = keys.a = keys.s = keys.d = false;
+  ["w","a","s","d"].forEach(k => setKey(k, false));
+  gpPrev = {};
+  sendMotionNow();
+  updateModeUI();
+  saveSettings();
+  log("Control mode: " + mode, "info");
+}
+
+function updateModeUI() {
+  const btn = document.getElementById("mode-toggle");
+  if (btn) btn.textContent = MODE_LABELS[controlMode];
+  const show = (id, on) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = on ? "" : "none";
+  };
+  show("kb-visual", controlMode === "keyboard");
+  show("gamepad-status", controlMode === "controller");
+  show("avatar-placeholder", controlMode === "avatar");
+  if (controlMode === "controller") updateGamepadStatusUI();
+}
+
+// ─── Gamepad (controller mode) ────────────────────────────────────────────────
+function updateGamepadStatusUI() {
+  const dot  = document.getElementById("gp-dot");
+  const name = document.getElementById("gp-name");
+  if (!dot || !name) return;
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  const gp = gamepadIndex !== null ? pads[gamepadIndex] : null;
+  if (gp) {
+    dot.classList.add("on");
+    name.textContent = gp.id + (gp.mapping === "standard" ? "" : "  [non-standard mapping — remap in Parameters]");
+  } else {
+    dot.classList.remove("on");
+    name.textContent = "No gamepad — press any button";
+  }
+}
+
+window.addEventListener("gamepadconnected", e => {
+  if (gamepadIndex === null) gamepadIndex = e.gamepad.index;
+  log("Gamepad connected: " + e.gamepad.id + " (mapping: " + (e.gamepad.mapping || "non-standard") + ")", "info");
+  updateGamepadStatusUI();
+});
+
+window.addEventListener("gamepaddisconnected", e => {
+  if (e.gamepad.index === gamepadIndex) {
+    gamepadIndex = null;
+    gpPrev = {};
+    if (controlMode === "controller") {
+      keys.w = keys.a = keys.s = keys.d = false;
+      applyMoveChange();  // safety stop
+    }
+  }
+  log("Gamepad disconnected: " + e.gamepad.id, "warn");
+  updateGamepadStatusUI();
+});
+
+function activeGamepad() {
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  if (gamepadIndex !== null && pads[gamepadIndex]) return pads[gamepadIndex];
+  // Adopt the first available pad (Chrome only exposes pads after a button press)
+  for (const gp of pads) {
+    if (gp) { gamepadIndex = gp.index; updateGamepadStatusUI(); return gp; }
+  }
+  return null;
+}
+
+function padDown(gp, name) {
+  const b = gp.buttons[CONTROLLER.buttons[name]];
+  if (!b) return false;
+  return b.pressed || b.value > CONTROLLER.triggerThreshold;
+}
+
+function nudgeFlipper(id, delta) {
+  const s = SERVOS.find(sv => sv.id === id);
+  if (!s) return;
+  const cur = getServoAngle(id);
+  const target = Math.max(s.min, Math.min(s.max, Math.round(cur + delta)));
+  if (target !== cur) setServoAngle(id, target);
+}
+
+function pollGamepad() {
+  if (controlMode !== "controller") return;
+  const gp = activeGamepad();
+  if (!gp) return;
+
+  // D-pad → movement, reusing the keyboard motion pipeline via `keys`
+  const dUp = padDown(gp, "dpadUp"), dDown = padDown(gp, "dpadDown");
+  const dLeft = padDown(gp, "dpadLeft"), dRight = padDown(gp, "dpadRight");
+  if (dUp !== keys.w || dDown !== keys.s || dLeft !== keys.a || dRight !== keys.d) {
+    keys.w = dUp; keys.s = dDown; keys.a = dLeft; keys.d = dRight;
+    applyMoveChange();
+  }
+
+  // Triggers/bumpers → flippers, hold-to-move
+  const step = CONTROLLER.flipper.stepDeg;
+  if (padDown(gp, "rt")) nudgeFlipper(FLIPPER_FRONT_ID,  CONTROLLER.flipper.frontRaiseSign * step);
+  if (padDown(gp, "rb")) nudgeFlipper(FLIPPER_FRONT_ID, -CONTROLLER.flipper.frontRaiseSign * step);
+  if (padDown(gp, "lt")) nudgeFlipper(FLIPPER_BACK_ID,   CONTROLLER.flipper.backRaiseSign * step);
+  if (padDown(gp, "lb")) nudgeFlipper(FLIPPER_BACK_ID,  -CONTROLLER.flipper.backRaiseSign * step);
+
+  // Edge-detected buttons
+  const edge = name => {
+    const down = padDown(gp, name);
+    const was = gpPrev[name];
+    gpPrev[name] = down;
+    return down && !was;
+  };
+  if (edge("r3")) cycleGear();
+  Object.keys(CONTROLLER.posturesByButton).forEach(btn => {
+    if (edge(btn)) applyPosture(CONTROLLER.posturesByButton[btn]);
+  });
+}
+
+setInterval(pollGamepad, 50);
 
 // ─── Motor telemetry ──────────────────────────────────────────────────────────
 // tor is torque current as signed int16: -32767~32767 = -8A~8A

@@ -33,7 +33,7 @@
       "cur": 30,
       "tgt": 30
     },
-    "arm3": {
+    "extend": {
       "cur": 0,
       "tgt": 0
     },
@@ -71,8 +71,8 @@
       "dir": -1,
       "scale": 1.5
     },
-    "arm3": {
-      "n": 90,
+    "extend": {
+      "n": 0,
       "dir": -1,
       "scale": 1
     },
@@ -91,5 +91,107 @@
       "dir": 1,
       "scale": 1
     }
+  },
+  "postures": {
+    "home": [
+      90,
+      90,
+      90,
+      90,
+      90,
+      90,
+      90,
+      90
+    ],
+    "stair": [
+      90,
+      90,
+      90,
+      90,
+      90,
+      90,
+      90,
+      90
+    ],
+    "ramp": [
+      90,
+      90,
+      90,
+      90,
+      90,
+      90,
+      90,
+      90
+    ],
+    "fold": [
+      90,
+      90,
+      90,
+      90,
+      90,
+      90,
+      90,
+      90
+    ],
+    "giraffe": [
+      90,
+      90,
+      90,
+      90,
+      90,
+      90,
+      90,
+      90
+    ],
+    "finish": [
+      90,
+      90,
+      90,
+      90,
+      90,
+      90,
+      90,
+      90
+    ],
+    "backramp": [
+      90,
+      90,
+      90,
+      90,
+      90,
+      90,
+      90,
+      90
+    ]
+  },
+  "controller": {
+    "buttons": {
+      "dpadUp": 12,
+      "dpadDown": 13,
+      "dpadLeft": 14,
+      "dpadRight": 15,
+      "lb": 4,
+      "rb": 5,
+      "lt": 6,
+      "rt": 7,
+      "r3": 11,
+      "a": 0,
+      "b": 1,
+      "x": 2,
+      "y": 3
+    },
+    "posturesByButton": {
+      "a": "home",
+      "b": "fold",
+      "x": "stair",
+      "y": "finish"
+    },
+    "flipper": {
+      "stepDeg": 2,
+      "frontRaiseSign": -1,
+      "backRaiseSign": 1
+    },
+    "triggerThreshold": 0.5,
+    "deadzone": 0.15
   }
 }

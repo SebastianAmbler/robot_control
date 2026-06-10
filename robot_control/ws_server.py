@@ -24,6 +24,7 @@ from urllib.parse import urlparse, unquote
 PI_IP         = "192.168.1.101"   # <-- SET THIS to your Pi's IP address
 UDP_CMD_PORT  = 3390              # port esp32_bridge listens on
 UDP_FB_PORT   = 3391              # port esp32_bridge sends feedback to
+UDP_SERVO_PORT = 3391             # port UDPS.py listens on for servo JSON packets
 
 WS_HOST       = "0.0.0.0"
 WS_PORT       = 8765
@@ -39,6 +40,15 @@ DEFAULT_SETTINGS = {
     "thresholds": {
         "tor": {"warn": 0.96, "crit": 2.0},
         "tmp": {"warn": 60, "crit": 75}
+    },
+    "postures": {
+        "home": [90, 90, 90, 90, 90, 90, 90, 90],
+        "stair": [90, 90, 90, 90, 90, 90, 90, 90],
+        "ramp": [90, 90, 90, 90, 90, 90, 90, 90],
+        "fold": [90, 90, 90, 90, 90, 90, 90, 90],
+        "giraffe": [90, 90, 90, 90, 90, 90, 90, 90],
+        "finish": [90, 90, 90, 90, 90, 90, 90, 90],
+        "backramp": [90, 90, 90, 90, 90, 90, 90, 90]
     }
 }
 # ──────────────────────────────────────────────────────────────────────────────
@@ -227,6 +237,20 @@ async def handler(websocket):
                     state = int(obj.get("state", 0))
                     pkt = struct.pack("Bb", 0xFF, state)
                     udp_sock.sendto(pkt, (PI_IP, UDP_CMD_PORT))
+
+                elif cmd == "servo":
+                    servo_id = int(obj.get("id", 0))
+                    angle = int(obj.get("angle", 90))
+                    if servo_id < 1 or servo_id > 8:
+                        raise ValueError(f"servo id out of range: {servo_id}")
+                    if angle < 0 or angle > 180:
+                        raise ValueError(f"servo angle out of range: {angle}")
+                    payload = json.dumps({
+                        "cmd": "servo",
+                        "id": servo_id,
+                        "angle": angle
+                    }).encode()
+                    udp_sock.sendto(bytes([0xAA]) + payload, (PI_IP, UDP_SERVO_PORT))
 
             except Exception as e:
                 print(f"[WS] Error handling message: {e}")
