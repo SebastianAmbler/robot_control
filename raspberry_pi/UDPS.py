@@ -12,7 +12,7 @@ import threading
 # ═══════════════════════════════════════════════════════════════
 #  ★ SET THESE MANUALLY ★
 # ═══════════════════════════════════════════════════════════════
-MEGA_PORT  = "/dev/ttyUSB0"
+MEGA_PORT  = "/dev/ttyACM0"
 BAUD_RATE  = 115200
 
 # ── UDP ───────────────────────────────────────────────────────
@@ -88,18 +88,22 @@ class MegaSerial:
         self._ser       = None
         self._write_lock = threading.Lock()   # guards serial writes only
         self._ser_lock   = threading.Lock()   # guards _ser assignment
-        self._connect()
+        if not self._connect():
+            print(f"[MEGA]  WARN: {MEGA_PORT} not found — servo packets will be dropped, will keep retrying")
 
     def _connect(self):
         if not os.path.exists(MEGA_PORT):
-            print(f"[MEGA]  WARN: {MEGA_PORT} not found — servo packets will be dropped")
-            return
+            return False
         try:
-            self._ser = serial.Serial(MEGA_PORT, BAUD_RATE, timeout=1)
+            ser = serial.Serial(MEGA_PORT, BAUD_RATE, timeout=1)
             time.sleep(1.5)
+            with self._ser_lock:
+                self._ser = ser
             print(f"[MEGA]  OK → {MEGA_PORT} @ {BAUD_RATE}")
+            return True
         except serial.SerialException as e:
             print(f"[MEGA]  ERROR: {e}")
+            return False
 
     def send(self, json_bytes: bytes):
         """Forward JSON + newline to Mega serial (write-lock only)."""
@@ -129,12 +133,18 @@ class MegaSerial:
         No shared lock means writes never stall reads.
         """
         print(f"[MEGA]  Read loop started — will forward ANGLES:/DATA: lines to PC:{PC_ANGLES_PORT}")
+        last_reconnect_attempt = 0
         while True:
             try:
                 with self._ser_lock:
                     ser = self._ser
 
                 if ser is None:
+                    now = time.monotonic()
+                    if now - last_reconnect_attempt >= 2.0:
+                        last_reconnect_attempt = now
+                        if self._connect():
+                            print("[MEGA]  reconnected")
                     time.sleep(0.1)
                     continue
 
