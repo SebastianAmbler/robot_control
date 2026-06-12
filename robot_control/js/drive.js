@@ -15,11 +15,6 @@ function buildGearUI() {
     pip.textContent = i + 1;
     gd.appendChild(pip);
   }
-  const lbl = document.createElement("div");
-  lbl.id = "gear-label";
-  lbl.className = "gear-label";
-  lbl.textContent = "Gear";
-  gd.appendChild(lbl);
 }
 
 function updateGearUI() {

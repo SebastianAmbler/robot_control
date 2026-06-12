@@ -62,6 +62,52 @@ function updateModeUI() {
   if (controlMode === "controller") updateGamepadStatusUI();
 }
 
+// ─── Webcam overlay ───────────────────────────────────────────────────────────
+// Toggles the full-screen placeholder webcam view (replaces the dual CAM 1/CAM 2
+// panes). The feed itself is a placeholder until the Pi 4 stream is wired in.
+function toggleWebcam() {
+  const overlay = document.getElementById("webcam-overlay");
+  const btn = document.getElementById("webcam-toggle-btn");
+  const toolbar = document.getElementById("webcam-toolbar");
+  if (!overlay) return;
+  const open = overlay.classList.toggle("open");
+  if (btn) btn.classList.toggle("active", open);
+  if (toolbar) toolbar.classList.toggle("open", open);
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    const overlay = document.getElementById("webcam-overlay");
+    if (overlay && overlay.classList.contains("open")) toggleWebcam();
+  }
+});
+
+// ─── Global hotkeys ───────────────────────────────────────────────────────────
+// Fire regardless of the active control mode (so the keyboard still works while
+// on controller/avatar). Bindings live in HOTKEYS and are configured in
+// Parameters. Ignored while typing in a form field or with a modifier held.
+function matchesHotkey(eventKey, binding) {
+  return !!binding && eventKey === binding.toLowerCase();
+}
+
+function handleHotkey(e) {
+  const t = e.target;
+  if (t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA")) return false;
+  if (e.ctrlKey || e.altKey || e.metaKey) return false;
+  const k = (e.key || "").toLowerCase();
+  if (!k) return false;
+  if (matchesHotkey(k, HOTKEYS.cycleMode)) { cycleControlMode(); return true; }
+  if (matchesHotkey(k, HOTKEYS.webcam))    { toggleWebcam();     return true; }
+  for (const name of POSTURE_NAMES) {
+    if (matchesHotkey(k, HOTKEYS.postures[name])) { applyPosture(name); return true; }
+  }
+  return false;
+}
+
+document.addEventListener("keydown", (e) => {
+  if (handleHotkey(e)) e.preventDefault();
+});
+
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 log("Ready. Enter WebSocket URL and connect.", "info");
 loadParamSettings();  // Async - loads from file in background

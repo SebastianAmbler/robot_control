@@ -217,6 +217,68 @@ function readServoLimitsFromParams() {
   POSTURE_NAMES.forEach(name => { POSTURES[name] = clampPostureAngles(name, POSTURES[name]); });
 }
 
+// ─── Avatar arm calibration param UI ──────────────────────────────────────────
+function buildAvatarCalibParamUI() {
+  const grid = document.getElementById("avatar-calib-grid");
+  if (!grid) return;
+  grid.innerHTML = "";
+
+  ["Channel", "Rev", "In min", "In max", "Out min", "Out max"].forEach(text => {
+    const head = document.createElement("div");
+    head.className = "avatar-calib-head";
+    head.textContent = text;
+    grid.appendChild(head);
+  });
+
+  AVATAR_CALIB.forEach(c => {
+    const label = document.createElement("div");
+    label.className = "avatar-calib-label";
+    label.textContent = c.name + " (id " + c.sid + ")";
+    grid.appendChild(label);
+
+    const revWrap = document.createElement("div");
+    revWrap.className = "avatar-calib-rev";
+    const rev = document.createElement("input");
+    rev.type = "checkbox";
+    rev.id = "avatar-rev-" + c.pot;
+    rev.checked = !!c.rev;
+    rev.title = c.name + " reverse direction";
+    revWrap.appendChild(rev);
+    grid.appendChild(revWrap);
+
+    ["in0", "in1", "out0", "out1"].forEach(f => {
+      const input = document.createElement("input");
+      input.type = "number";
+      input.id = "avatar-" + f + "-" + c.pot;
+      input.min = 0;
+      input.max = 180;
+      input.step = 1;
+      input.value = c[f];
+      input.title = c.name + " " + f;
+      grid.appendChild(input);
+    });
+  });
+}
+
+// Read avatar calib inputs back into AVATAR_CALIB / AVATAR_DEADBAND.
+function readAvatarCalibFromParams() {
+  AVATAR_CALIB.forEach(c => {
+    const revEl = document.getElementById("avatar-rev-" + c.pot);
+    if (revEl) c.rev = revEl.checked;
+    ["in0", "in1", "out0", "out1"].forEach(f => {
+      const el = document.getElementById("avatar-" + f + "-" + c.pot);
+      if (!el) return;
+      const v = Math.round(Number(el.value));
+      if (Number.isFinite(v)) c[f] = Math.max(0, Math.min(180, v));
+    });
+  });
+  const dEl = document.getElementById("avatar-deadband");
+  if (dEl) {
+    const d = Math.round(Number(dEl.value));
+    if (Number.isFinite(d) && d >= 0) AVATAR_DEADBAND = d;
+  }
+}
+
 function applyPosture(name) {
   if (!POSTURE_NAMES.includes(name)) return;
   const angles = clampPostureAngles(name, POSTURES[name]);

@@ -77,6 +77,18 @@ DEFAULT_SETTINGS = {
         "giraffe": [90, 90, 90, 90, 90, 90, 90, 90],
         "finish": [90, 90, 90, 90, 90, 90, 90, 90],
         "backramp": [90, 90, 90, 90, 90, 90, 90, 90]
+    },
+    "hotkeys": {
+        "cycleMode": "m",
+        "webcam": "p",
+        "postures": {
+            "home": "F1", "stair": "F2", "ramp": "F3", "fold": "F4",
+            "giraffe": "F5", "finish": "F6", "backramp": "F7"
+        }
+    },
+    "avatar": {
+        "deadband": AVATAR_DEADBAND,
+        "calib": CALIB,
     }
 }
 # ──────────────────────────────────────────────────────────────────────────────
@@ -354,6 +366,12 @@ class AvatarBridge:
         self._thread = None
 
     def _run(self):
+        # Pull calibration from settings.json so saved values take effect,
+        # falling back to the in-code CALIB / AVATAR_DEADBAND defaults.
+        avatar_cfg = load_settings().get("avatar", {})
+        calib = avatar_cfg.get("calib") or CALIB
+        deadband = avatar_cfg.get("deadband", AVATAR_DEADBAND)
+
         port = None
         try:
             port = find_avatar_teensy()
@@ -382,12 +400,12 @@ class AvatarBridge:
                     vals = parse_line(raw)
                     if vals is None:
                         continue
-                    for i, c in enumerate(CALIB):
+                    for i, c in enumerate(calib):
                         if i >= len(vals):
                             continue
                         angle = to_angle(vals[i], c)
                         sid   = c['sid']
-                        if sid not in prev or abs(angle - prev[sid]) > AVATAR_DEADBAND:
+                        if sid not in prev or abs(angle - prev[sid]) > deadband:
                             self._send_servo(sid, angle)
                             prev[sid] = angle
                 except Exception as e:

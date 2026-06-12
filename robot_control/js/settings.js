@@ -142,6 +142,65 @@ function readControllerFromParams() {
   });
 }
 
+// ─── Hotkey param UI ──────────────────────────────────────────────────────────
+// Each binding is a "capture" input: focus it and press a key to rebind. The
+// stored value is the raw key (single chars lowercased, e.g. "m"; function keys
+// as "F1"). Escape/Tab leave the field without changing the binding.
+function attachHotkeyCapture(input) {
+  if (input.dataset.hkBound) return;
+  input.dataset.hkBound = "1";
+  input.readOnly = true;
+  input.addEventListener("keydown", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.key === "Escape" || e.key === "Tab") { input.blur(); return; }
+    input.value = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  });
+}
+
+function buildHotkeyParamUI() {
+  const grid = document.getElementById("hotkey-posture-grid");
+  if (!grid) return;
+  grid.innerHTML = "";
+  POSTURE_NAMES.forEach(name => {
+    const label = document.createElement("label");
+    label.textContent = postureLabel(name);
+    grid.appendChild(label);
+    const input = document.createElement("input");
+    input.type = "text";
+    input.id = "hk-posture-" + name;
+    input.className = "hotkey-input";
+    input.placeholder = "unset";
+    input.title = "Click and press a key to bind " + postureLabel(name);
+    attachHotkeyCapture(input);
+    grid.appendChild(input);
+  });
+}
+
+function populateHotkeyParams() {
+  buildHotkeyParamUI();
+  const setHk = (id, v) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    attachHotkeyCapture(el);
+    el.value = v || "";
+  };
+  setHk("hk-cycleMode", HOTKEYS.cycleMode);
+  setHk("hk-webcam",    HOTKEYS.webcam);
+  POSTURE_NAMES.forEach(name => setHk("hk-posture-" + name, HOTKEYS.postures[name]));
+}
+
+function readHotkeysFromParams() {
+  const cm = document.getElementById("hk-cycleMode")?.value.trim();
+  if (cm) HOTKEYS.cycleMode = cm;
+  const wc = document.getElementById("hk-webcam")?.value.trim();
+  if (wc) HOTKEYS.webcam = wc;
+  POSTURE_NAMES.forEach(name => {
+    const v = document.getElementById("hk-posture-" + name)?.value.trim();
+    if (v) HOTKEYS.postures[name] = v;
+  });
+}
+
 function loadParams() {
   // Load from file-based API
   fetch("http://localhost:8766/api/settings")
@@ -183,6 +242,7 @@ function loadParams() {
         });
       }
       applyServoLimits(p.servoLimits);
+      applyAvatarCalib(p.avatar);
       loadPostures(p);
       // Populate form fields
       for (let i = 0; i < GEARS.length; i++) {
@@ -210,14 +270,23 @@ function loadParams() {
         if (scaleEl) scaleEl.value = SIM_CAL[k].scale;
       });
       mergeControllerSettings(p.controller);
+      mergeHotkeySettings(p.hotkeys);
       populateControllerParams();
+      populateHotkeyParams();
       buildPostureParamUI();
       buildServoLimitParamUI();
+      buildAvatarCalibParamUI();
+      const dbEl = document.getElementById("avatar-deadband");
+      if (dbEl) dbEl.value = AVATAR_DEADBAND;
     })
     .catch(e => {
       populateControllerParams();
+      populateHotkeyParams();
       buildPostureParamUI();
       buildServoLimitParamUI();
+      buildAvatarCalibParamUI();
+      const dbEl = document.getElementById("avatar-deadband");
+      if (dbEl) dbEl.value = AVATAR_DEADBAND;
       log("Error loading parameters: " + e.message, "warn");
     });
 }
@@ -245,7 +314,9 @@ function saveParams() {
 
   readPosturesFromParams();
   readControllerFromParams();
+  readHotkeysFromParams();
   readServoLimitsFromParams();
+  readAvatarCalibFromParams();
 
   // Update SIM_INIT from form
   SIM_KEYS.forEach(k => {
@@ -277,7 +348,9 @@ function saveParams() {
       simCal: SIM_CAL,
       postures: POSTURES,
       controller: CONTROLLER,
+      hotkeys: HOTKEYS,
       servoLimits: servoLimitsMap(),
+      avatar: avatarCalibMap(),
     })
   })
   .then(r => r.json())
@@ -323,7 +396,9 @@ function resetParams() {
       },
       postures: createDefaultPostures(),
       controller: JSON.parse(JSON.stringify(CONTROLLER_DEFAULTS)),
+      hotkeys: JSON.parse(JSON.stringify(HOTKEYS_DEFAULTS)),
       servoLimits: Object.fromEntries(SERVO_LIMIT_DEFAULTS.map(s => [s.id, { min: s.min, max: s.max }])),
+      avatar: { deadband: AVATAR_DEADBAND_DEFAULT, calib: AVATAR_CALIB_DEFAULTS.map(c => ({ ...c })) },
     };
 
     fetch("http://localhost:8766/api/settings", {
@@ -341,14 +416,20 @@ function resetParams() {
         if (defaults.simCal[k])  { SIM_CAL[k].n = defaults.simCal[k].n; SIM_CAL[k].dir = defaults.simCal[k].dir; SIM_CAL[k].scale = defaults.simCal[k].scale; }
       });
       applyServoLimits(defaults.servoLimits);
+      applyAvatarCalib(defaults.avatar);
       loadPostures(defaults);
       mergeControllerSettings(defaults.controller);
+      mergeHotkeySettings(defaults.hotkeys);
       populateControllerParams();
+      populateHotkeyParams();
       buildGearUI();
       buildServoUI();
       buildPostureUI();
       buildPostureParamUI();
       buildServoLimitParamUI();
+      buildAvatarCalibParamUI();
+      const dbEl = document.getElementById("avatar-deadband");
+      if (dbEl) dbEl.value = AVATAR_DEADBAND;
       postSimState(simAngles);
       log("Parameters reset to defaults", "info");
       closeParams();
@@ -396,8 +477,10 @@ function loadParamSettings() {
         });
       }
       applyServoLimits(p.servoLimits);
+      applyAvatarCalib(p.avatar);
       loadPostures(p);
       mergeControllerSettings(p.controller);
+      mergeHotkeySettings(p.hotkeys);
       // Rebuild UI with loaded settings
       buildGearUI();
       buildServoUI();

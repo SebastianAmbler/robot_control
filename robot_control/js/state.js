@@ -96,6 +96,44 @@ function applyServoLimits(saved) {
 function servoLimitsMap() {
   return Object.fromEntries(SERVOS.map(s => [s.id, { min: s.min, max: s.max }]));
 }
+
+// ─── Avatar arm calibration ───────────────────────────────────────────────────
+// Physical teleop arm: 3 potentiometers map to servos 3/4/5. Each channel maps a
+// raw pot value (in0..in1) onto a servo angle range (out0..out1), optionally
+// reversed. Mirrors the `avatar` block in settings.json / ws_server.py's CALIB —
+// keep pot/sid/order in sync. Only rev/in0/in1/out0/out1 are user-editable.
+const AVATAR_CALIB_DEFAULTS = [
+  { pot: 0, sid: 3, rev: false, in0: 0,   in1: 180, out0: 40, out1: 165, name: "Arm1 shoulder" },
+  { pot: 1, sid: 4, rev: true,  in0: 122, in1: 180, out0: 30, out1: 150, name: "Arm2 elbow" },
+  { pot: 2, sid: 5, rev: false, in0: 0,   in1: 180, out0: 20, out1: 180, name: "Arm3 wrist" },
+];
+const AVATAR_DEADBAND_DEFAULT = 2;
+let AVATAR_CALIB = AVATAR_CALIB_DEFAULTS.map(c => ({ ...c }));
+let AVATAR_DEADBAND = AVATAR_DEADBAND_DEFAULT;
+
+// Merge a saved avatar block onto AVATAR_CALIB/AVATAR_DEADBAND, matching channels
+// by pot index and validating each field. Missing/invalid values keep defaults.
+function applyAvatarCalib(saved) {
+  if (!saved) return;
+  if (Array.isArray(saved.calib)) {
+    AVATAR_CALIB.forEach(c => {
+      const s = saved.calib.find(x => x && x.pot === c.pot);
+      if (!s) return;
+      if (typeof s.rev === "boolean") c.rev = s.rev;
+      ["in0", "in1", "out0", "out1"].forEach(f => {
+        const v = Number(s[f]);
+        if (Number.isFinite(v)) c[f] = Math.max(0, Math.min(180, Math.round(v)));
+      });
+    });
+  }
+  const d = Number(saved.deadband);
+  if (Number.isFinite(d) && d >= 0) AVATAR_DEADBAND = Math.round(d);
+}
+
+// Build the {deadband, calib:[...]} block from current state (for persistence).
+function avatarCalibMap() {
+  return { deadband: AVATAR_DEADBAND, calib: AVATAR_CALIB.map(c => ({ ...c })) };
+}
 const POSTURE_NAMES = ['home','stair','ramp','fold','giraffe','finish','backramp'];
 const DEFAULT_POSTURE_ANGLES = [90, 90, 90, 90, 90, 90, 90, 90];
 const POSTURES = Object.fromEntries(
@@ -108,7 +146,7 @@ let activePostureName = null;
 // Xbox and PS4 (DualShock) pads expose in modern browsers. Remappable in
 // Parameters for pads that report a non-standard mapping.
 const CONTROL_MODES = ["keyboard", "controller", "avatar"];
-const MODE_LABELS = { keyboard: "⌨ Keyboard", controller: "🎮 Controller", avatar: "👤 Avatar" };
+const MODE_LABELS = { keyboard: "Keyboard", controller: "Controller", avatar: "Avatar" };
 let controlMode  = "keyboard";
 let gamepadIndex = null;
 let gpPrev = {};   // previous pressed state per logical button (edge detection)
@@ -149,4 +187,28 @@ function mergeControllerSettings(c) {
   if (!isNaN(tt) && tt > 0 && tt < 1) CONTROLLER.triggerThreshold = tt;
   const dz = parseFloat(c.deadzone);
   if (!isNaN(dz) && dz >= 0 && dz < 1) CONTROLLER.deadzone = dz;
+}
+
+// ─── Keyboard hotkeys ─────────────────────────────────────────────────────────
+// Global shortcuts that fire in ANY control mode (keyboard/controller/avatar).
+// Each value is a key string compared case-insensitively against event.key
+// (single chars stored lowercase, e.g. "m"; function keys as "F1".."F12").
+// Persisted in settings.json under "hotkeys" and editable in Parameters.
+const HOTKEYS_DEFAULTS = {
+  cycleMode: "m",                 // cycle keyboard → controller → avatar
+  webcam:    "p",                 // toggle the webcam overlay
+  // One key per posture, in POSTURE_NAMES order → F1 = home, F2 = stair, …
+  postures:  Object.fromEntries(POSTURE_NAMES.map((n, i) => [n, "F" + (i + 1)])),
+};
+const HOTKEYS = JSON.parse(JSON.stringify(HOTKEYS_DEFAULTS));
+
+function mergeHotkeySettings(h) {
+  if (!h) return;
+  if (typeof h.cycleMode === "string" && h.cycleMode) HOTKEYS.cycleMode = h.cycleMode;
+  if (typeof h.webcam    === "string" && h.webcam)    HOTKEYS.webcam    = h.webcam;
+  if (h.postures) {
+    POSTURE_NAMES.forEach(name => {
+      if (typeof h.postures[name] === "string" && h.postures[name]) HOTKEYS.postures[name] = h.postures[name];
+    });
+  }
 }

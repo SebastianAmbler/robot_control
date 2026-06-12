@@ -127,6 +127,7 @@
     grid-template-columns: 1fr 1fr;
     gap: 1px;
     background: var(--border);
+    position: relative;
   }
   .cam-feed {
     background: var(--surface);
@@ -568,7 +569,7 @@
   /* ── Board connection status ── */
   #board-status {
     position: absolute;
-    right: 16px;
+    right: 150px;
     bottom: 10px;
     display: flex;
     flex-direction: column;
@@ -594,6 +595,75 @@
     transition: background 0.2s;
   }
   .board-dot.on { background: var(--ok); }
+
+  /* ── Webcam toggle button (floating, bottom-right) ── */
+  #webcam-toggle-btn {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 90;
+    font-family: var(--font);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 8px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  #webcam-toggle-btn:hover { border-color: var(--accent); color: var(--accent); }
+  #webcam-toggle-btn.active { border-color: var(--accent); color: var(--accent); }
+
+  /* ── Webcam overlay screen (covers the two camera panes only) ── */
+  #webcam-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    background: var(--bg);
+    flex-direction: column;
+  }
+  #webcam-overlay.open { display: flex; }
+  /* Webcam placeholder tools — live in the header, shown only when webcam is open */
+  #webcam-toolbar {
+    display: none;
+    align-items: center;
+    gap: 6px;
+  }
+  #webcam-toolbar.open { display: flex; }
+  .webcam-tool-btn {
+    font-family: var(--font);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    background: transparent;
+    border: 1px solid var(--border2);
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .webcam-tool-btn:hover { border-color: var(--accent); color: var(--accent); }
+  #webcam-feed {
+    flex: 1;
+    min-height: 0;
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    position: relative;
+  }
+  #webcam-feed .cam-icon { width: 48px; height: 48px; }
+  #webcam-feed span {
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    opacity: 0.6;
+  }
 
   /* ── Settings button ── */
   #settings-btn {
@@ -895,6 +965,12 @@
     padding: 4px 5px;
   }
   .ctl-btn-grid input:focus { outline: none; border-color: var(--accent2); }
+  .hotkey-input {
+    text-align: center;
+    cursor: pointer;
+    caret-color: transparent;
+  }
+  .hotkey-input:focus { background: var(--surface); border-color: var(--accent); }
   .param-row select {
     flex: 1;
     background: var(--surface2);
@@ -1101,6 +1177,43 @@
     text-align: center;
   }
   .servo-limit-grid input[type="number"]:focus { border-color: var(--accent2); }
+
+  .avatar-calib-grid {
+    display: grid;
+    grid-template-columns: 1.4fr 0.5fr 1fr 1fr 1fr 1fr;
+    gap: 4px 6px;
+    align-items: center;
+  }
+  .avatar-calib-head {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--border2);
+    text-transform: uppercase;
+    text-align: center;
+    padding-bottom: 2px;
+  }
+  .avatar-calib-label {
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .avatar-calib-rev {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  .avatar-calib-grid input[type="number"] {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 10px;
+    padding: 3px 5px;
+    outline: none;
+    min-width: 0;
+    text-align: center;
+  }
+  .avatar-calib-grid input[type="number"]:focus { border-color: var(--accent2); }
 </style>
 </head>
 <body>
@@ -1111,8 +1224,18 @@
   <div class="title">Robot Control</div>
   <div id="status-text">Disconnected</div>
   <div class="spacer"></div>
+  <!-- Webcam placeholder tools (shown only while the webcam view is open) -->
+  <div id="webcam-toolbar">
+    <button class="webcam-tool-btn" onclick="return false">BTN 1</button>
+    <button class="webcam-tool-btn" onclick="return false">BTN 2</button>
+    <button class="webcam-tool-btn" onclick="return false">BTN 3</button>
+    <button class="webcam-tool-btn" onclick="return false">BTN 4</button>
+    <button class="webcam-tool-btn" onclick="return false">BTN 5</button>
+    <button class="webcam-tool-btn" onclick="return false">BTN 6</button>
+  </div>
+  <div class="spacer"></div>
   <button id="lock-btn" onclick="toggleLock()">Lock</button>
-  <button id="settings-btn" onclick="openSettings()" title="Settings">⚙</button>
+  <button id="settings-btn" onclick="openSettings()" title="Settings">Settings</button>
 </div>
 
 <!-- LEFT PANEL -->
@@ -1123,7 +1246,7 @@
   </div>
   <div class="panel-section">
     <div class="panel-label">Control Mode</div>
-    <button id="mode-toggle" onclick="cycleControlMode()">⌨ Keyboard</button>
+    <button id="mode-toggle" onclick="cycleControlMode()">Keyboard</button>
   </div>
   <div id="log-section">
     <div class="panel-label">Log</div>
@@ -1153,6 +1276,20 @@
       <path d="M8 6V4h8v2"/>
     </svg>
     <span>No signal</span>
+  </div>
+
+  <!-- WEBCAM OVERLAY (covers the two camera panes only) -->
+  <div id="webcam-overlay">
+    <div id="webcam-feed">
+      <!-- TODO: replace placeholder below with live Raspberry Pi 4 webcam stream
+           (e.g. <img id="webcam-stream" src="http://<pi>:<port>/stream.mjpg"> or a <video> element) -->
+      <svg class="cam-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.12">
+        <rect x="2" y="6" width="20" height="14" rx="2"/>
+        <circle cx="12" cy="13" r="4"/>
+        <path d="M8 6V4h8v2"/>
+      </svg>
+      <span>No signal — awaiting Pi 4 feed</span>
+    </div>
   </div>
 </div>
 
@@ -1257,6 +1394,9 @@
     </div>
   </div>
 </div>
+
+<!-- WEBCAM TOGGLE BUTTON (floating, bottom-right) -->
+<button id="webcam-toggle-btn" onclick="toggleWebcam()" title="Toggle webcam feed">Webcam</button>
 
 <!-- SETTINGS OVERLAY -->
 <div id="settings-overlay" onclick="overlayClick(event)">
@@ -1365,6 +1505,15 @@
       <div class="param-group">
         <div class="param-group-label">Servo Limits (min / max angle)</div>
         <div class="servo-limit-grid" id="servo-limit-grid"></div>
+      </div>
+
+      <div class="param-group">
+        <div class="param-group-label">Avatar Arm Calibration (pot → servo)</div>
+        <div class="avatar-calib-grid" id="avatar-calib-grid"></div>
+        <div class="param-row">
+          <label>Deadband (°)</label>
+          <input type="number" id="avatar-deadband" min="0" max="90" step="1">
+        </div>
       </div>
 
       <div class="param-group">
@@ -1506,6 +1655,16 @@
           <label>Y / Triangle</label>
           <select id="ctl-posture-y"></select>
         </div>
+      </div>
+
+      <div class="param-group">
+        <div class="param-group-label">Keyboard Hotkeys (active in any control mode)</div>
+        <div class="ctl-btn-grid">
+          <label>Cycle control mode</label><input type="text" id="hk-cycleMode" class="hotkey-input" placeholder="unset" title="Click and press a key to bind">
+          <label>Toggle webcam</label><input type="text" id="hk-webcam" class="hotkey-input" placeholder="unset" title="Click and press a key to bind">
+        </div>
+        <div class="param-group-label" style="margin-top:10px;">Postures</div>
+        <div class="ctl-btn-grid" id="hotkey-posture-grid"></div>
       </div>
     </div>
     <div id="params-footer">
