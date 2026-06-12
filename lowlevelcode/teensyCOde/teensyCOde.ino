@@ -250,7 +250,7 @@ void moveServoById(int id, int angle) {
       currentAngles[6] = angle;
       break;
     case 8: {
-      servoarm5.write(angle);
+      gripper.write(angle);
       currentAngles[7] = angle;
       break;
     }

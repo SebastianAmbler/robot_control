@@ -53,6 +53,15 @@ function padDown(gp, name) {
   return b.pressed || b.value > CONTROLLER.triggerThreshold;
 }
 
+function setDpadVisual(up, down, left, right) {
+  const set = (id, on) => {
+    const el = document.getElementById(id);
+    if (el) el.className = "key" + (on ? " active" : "");
+  };
+  set("dpad-up", up); set("dpad-down", down);
+  set("dpad-left", left); set("dpad-right", right);
+}
+
 function nudgeFlipper(id, delta) {
   const s = SERVOS.find(sv => sv.id === id);
   if (!s) return;
@@ -69,6 +78,7 @@ function pollGamepad() {
   // D-pad → movement, reusing the keyboard motion pipeline via `keys`
   const dUp = padDown(gp, "dpadUp"), dDown = padDown(gp, "dpadDown");
   const dLeft = padDown(gp, "dpadLeft"), dRight = padDown(gp, "dpadRight");
+  setDpadVisual(dUp, dDown, dLeft, dRight);
   if (dUp !== keys.w || dDown !== keys.s || dLeft !== keys.a || dRight !== keys.d) {
     keys.w = dUp; keys.s = dDown; keys.a = dLeft; keys.d = dRight;
     applyMoveChange();

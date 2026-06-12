@@ -56,7 +56,7 @@
     <div class="servo-row" id="row-back"><span class="servo-label">BACK [U]</span><div class="servo-bar-wrap"><div class="servo-bar" id="bar-back"></div></div><span class="servo-deg" id="deg-back">115°</span></div>
     <div class="servo-row" id="row-arm1"><span class="servo-label">ARM1 [I]</span><div class="servo-bar-wrap"><div class="servo-bar arm" id="bar-arm1"></div></div><span class="servo-deg arm" id="deg-arm1">105°</span></div>
     <div class="servo-row" id="row-arm2"><span class="servo-label">ARM2 [O]</span><div class="servo-bar-wrap"><div class="servo-bar arm" id="bar-arm2"></div></div><span class="servo-deg arm" id="deg-arm2">180°</span></div>
-    <div class="servo-row" id="row-arm3"><span class="servo-label">ARM3 [H]</span><div class="servo-bar-wrap"><div class="servo-bar arm" id="bar-arm3"></div></div><span class="servo-deg arm" id="deg-arm3">0°</span></div>
+    <div class="servo-row" id="row-extend"><span class="servo-label">EXTEND [H]</span><div class="servo-bar-wrap"><div class="servo-bar arm" id="bar-extend"></div></div><span class="servo-deg arm" id="deg-extend">0°</span></div>
     <div class="servo-row" id="row-gripper"><span class="servo-label">GRIP [L]</span><div class="servo-bar-wrap"><div class="servo-bar arm" id="bar-gripper"></div></div><span class="servo-deg arm" id="deg-gripper">90°</span></div>
 </div>
 
@@ -78,14 +78,14 @@ function dbg(msg, cls = 'ok') {
     logEl.scrollTop = logEl.scrollHeight;
 }
 
-const IDX_TO_KEY = ['front','back','arm1','arm2','arm3','arm4','arm5','gripper'];
+const IDX_TO_KEY = ['front','back','arm1','arm2','extend','arm4','arm5','gripper'];
 
 const servo = {
     front:   { cur: 85,  tgt: 85  },
     back:    { cur: 96,  tgt: 96  },
     arm1:    { cur: 175, tgt: 175 },
     arm2:    { cur: 30, tgt: 30 },
-    arm3:    { cur: 0,   tgt: 0 },
+    extend:  { cur: 0,   tgt: 0 },
     arm4:    { cur: 60,  tgt: 60  },
     arm5:    { cur: 110, tgt: 110 },
     gripper: { cur: 90,  tgt: 90  },
@@ -104,7 +104,7 @@ function setServoUI(key, deg, active) {
     if (row) row.classList.toggle('active-row', active);
 }
 
-const UI_KEYS = ['front','back','arm1','arm2','arm3','gripper'];
+const UI_KEYS = ['front','back','arm1','arm2','extend','gripper'];
 function updateAllUI() {
     UI_KEYS.forEach(k => setServoUI(k, servo[k].cur, k === activeKey));
     document.getElementById('activeLabel').innerText = activeKey ? `► ${activeKey.toUpperCase()}` : '';
@@ -115,8 +115,9 @@ const CAL = {
     back:    { n: 96, dir: 1,  scale: 0.85, offset: 0 },
     arm1:    { n: 175, dir: 1, scale: 1.2,  offset: 0 },
     arm2:    { n: 30,  dir: 1, scale: 1.5,  offset: 0 },
-    arm3:    { n: 90,  dir: -1, scale: 1,    offset: 0 },
+    extend:  { n: 0,   dir: -1, scale: 1,    offset: 0 },
     arm4:    { n: 60, dir: -1, scale: 1,    offset: 0 },
+    arm5:    { n: 90,  dir: 1,  scale: 1,    offset: 0 },
     gripper: { n: 90,  dir: +1, scale: 1,    offset: 0 },
 };
 function servoToRad(deg, key) {

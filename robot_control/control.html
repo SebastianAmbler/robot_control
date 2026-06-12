@@ -159,10 +159,11 @@
   /* ── Footer ── */
   #footer {
     grid-area: footer;
+    position: relative;
     background: var(--surface);
     border-top: 1px solid var(--border);
     display: grid;
-    grid-template-columns: minmax(0, 320px) 1fr minmax(0, 420px);
+    grid-template-columns: minmax(0, 320px) auto 1fr minmax(0, 420px);
     align-items: stretch;
     padding: 0 16px;
     gap: 16px;
@@ -205,7 +206,7 @@
   }
 
   /* ── WASD visualizer ── */
-  #wasd {
+  #wasd, #dpad {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -247,6 +248,7 @@
     white-space: nowrap;
   }
   #mode-toggle:hover { border-color: var(--accent); color: var(--accent); }
+  #left-panel #mode-toggle { display: block; width: 100%; }
   #kb-visual {
     display: flex;
     align-items: center;
@@ -477,12 +479,15 @@
 
   /* ── WASD center + right-col layout ── */
   #footer-center {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 28px;
     min-width: 0;
-    overflow: hidden;
   }
   #footer-right {
     display: flex;
@@ -497,7 +502,9 @@
     flex-direction: column;
     gap: 5px;
     min-width: 0;
-    flex: 1;
+    flex-shrink: 0;
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
   }
   #posture-label {
     font-size: 9px;
@@ -557,6 +564,36 @@
     align-items: flex-end;
   }
   .rpm-col { text-align: center; }
+
+  /* ── Board connection status ── */
+  #board-status {
+    position: absolute;
+    right: 16px;
+    bottom: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    z-index: 2;
+  }
+  .board-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .board-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--border2);
+    flex-shrink: 0;
+    transition: background 0.2s;
+  }
+  .board-dot.on { background: var(--ok); }
 
   /* ── Settings button ── */
   #settings-btn {
@@ -918,6 +955,55 @@
     min-height: 0;
   }
 
+  /* ── Motor status section ── */
+  #motor-section {
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  #motor-section .panel-label {
+    padding: 5px 0 4px;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  #motor-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+    padding: 6px 0;
+    align-content: center;
+    min-height: 0;
+  }
+  .motor-card {
+    border: 1px solid var(--border);
+    background: var(--bg);
+    padding: 3px 8px;
+    font-size: 11px;
+    min-width: 110px;
+    transition: border-color 0.15s;
+  }
+  .motor-name {
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 1px;
+  }
+  .motor-stat {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    line-height: 1.4;
+  }
+  .motor-stat-label {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    align-self: center;
+  }
+
   /* ── Sim params in overlay ── */
   .sim-cal-grid {
     display: grid;
@@ -1035,6 +1121,10 @@
     <div class="panel-label">Gear</div>
     <div id="gear-display"></div>
   </div>
+  <div class="panel-section">
+    <div class="panel-label">Control Mode</div>
+    <button id="mode-toggle" onclick="cycleControlMode()">⌨ Keyboard</button>
+  </div>
   <div id="log-section">
     <div class="panel-label">Log</div>
     <div id="log"></div>
@@ -1072,6 +1162,10 @@
     <div class="panel-label">Servos</div>
     <div id="servo-container"></div>
   </div>
+  <div id="posture-panel">
+    <div id="posture-label">Postures</div>
+    <div id="posture-buttons"></div>
+  </div>
 </div>
 
 <!-- FOOTER -->
@@ -1084,8 +1178,37 @@
     <iframe id="sim-iframe" src="http://localhost:8766/index.html" scrolling="no" allowfullscreen></iframe>
   </div>
 
+  <div id="motor-section">
+    <div class="panel-label">Motors</div>
+    <div id="motor-grid">
+      <div class="motor-card" id="mc1">
+        <div class="motor-name">M1</div>
+        <div class="motor-stat"><span class="motor-stat-label">SPD</span><span id="m1-spd">--</span></div>
+        <div class="motor-stat"><span class="motor-stat-label">TOR</span><span id="m1-tor">--</span></div>
+        <div class="motor-stat"><span class="motor-stat-label">TMP</span><span id="m1-tmp">--</span></div>
+      </div>
+      <div class="motor-card" id="mc2">
+        <div class="motor-name">M2</div>
+        <div class="motor-stat"><span class="motor-stat-label">SPD</span><span id="m2-spd">--</span></div>
+        <div class="motor-stat"><span class="motor-stat-label">TOR</span><span id="m2-tor">--</span></div>
+        <div class="motor-stat"><span class="motor-stat-label">TMP</span><span id="m2-tmp">--</span></div>
+      </div>
+      <div class="motor-card" id="mc3">
+        <div class="motor-name">M3</div>
+        <div class="motor-stat"><span class="motor-stat-label">SPD</span><span id="m3-spd">--</span></div>
+        <div class="motor-stat"><span class="motor-stat-label">TOR</span><span id="m3-tor">--</span></div>
+        <div class="motor-stat"><span class="motor-stat-label">TMP</span><span id="m3-tmp">--</span></div>
+      </div>
+      <div class="motor-card" id="mc4">
+        <div class="motor-name">M4</div>
+        <div class="motor-stat"><span class="motor-stat-label">SPD</span><span id="m4-spd">--</span></div>
+        <div class="motor-stat"><span class="motor-stat-label">TOR</span><span id="m4-tor">--</span></div>
+        <div class="motor-stat"><span class="motor-stat-label">TMP</span><span id="m4-tmp">--</span></div>
+      </div>
+    </div>
+  </div>
+
   <div id="footer-center">
-    <button id="mode-toggle" onclick="cycleControlMode()">⌨ Keyboard</button>
     <div id="kb-visual">
       <div id="wasd">
         <div class="key-row"><div class="key" id="key-w">W</div></div>
@@ -1095,27 +1218,32 @@
           <div class="key" id="key-d">D</div>
         </div>
       </div>
-      <div style="font-size:10px; color:var(--muted); text-align:center; line-height:1.8;">
-        <div>WASD  move</div>
-        <div>G  gear up</div>
-        <div>Y-L + / -  servo</div>
-      </div>
     </div>
     <div id="gamepad-status" style="display:none">
-      <div id="gp-line"><span id="gp-dot"></span><span id="gp-name">No gamepad — press any button</span></div>
-      <div class="gp-hint">
-        <div>D-Pad move · R3 gear</div>
-        <div>RT/RB front flip · LT/LB back flip</div>
-        <div>A/B/X/Y postures</div>
+      <div id="dpad">
+        <div class="key-row"><div class="key" id="dpad-up">↑</div></div>
+        <div class="key-row">
+          <div class="key" id="dpad-left">←</div>
+          <div class="key" id="dpad-down">↓</div>
+          <div class="key" id="dpad-right">→</div>
+        </div>
       </div>
+      <div id="gp-line"><span id="gp-dot"></span><span id="gp-name">No gamepad — press any button</span></div>
     </div>
-    <div id="avatar-placeholder" style="display:none">Avatar arm → Shoulder / Elbow / Extend · keyboard still active</div>
+    <div id="avatar-placeholder" style="display:none"></div>
   </div>
 
   <div id="footer-right">
-    <div id="posture-panel">
-      <div id="posture-label">Postures</div>
-      <div id="posture-buttons"></div>
+    <div id="board-status">
+      <div class="board-row" title="WebSocket link to ws_server.py (PC bridge)">
+        <span class="board-dot" id="ws-dot"></span><span class="board-name">WebSocket</span>
+      </div>
+      <div class="board-row" title="ESP32 drive controller telemetry via Raspberry Pi">
+        <span class="board-dot" id="esp32-dot"></span><span class="board-name">ESP32</span>
+      </div>
+      <div class="board-row" title="Teensy arm controller readback via Raspberry Pi">
+        <span class="board-dot" id="teensy-dot"></span><span class="board-name">Teensy</span>
+      </div>
     </div>
     <div class="rpm-pair">
       <div class="rpm-col">

@@ -7,6 +7,12 @@ let reconnectTimer = null;
 let reconnectDelay = 1000;   // ms, doubles on each failure up to max
 const RECONNECT_MAX = 16000;
 
+// Board liveness: timestamp of the last message proving each board is talking to
+// the Pi. ESP32 → motor telemetry (T:3); Teensy/arm → ANGLES:/DATA: readback.
+let lastEsp32Msg   = 0;
+let lastTeensyMsg  = 0;
+const BOARD_TIMEOUT = 2500;  // ms without data before a board is considered offline
+
 function setAutoStatus(msg) {
   document.getElementById("auto-status").textContent = msg;
 }
@@ -69,19 +75,20 @@ function connectWS(silent) {
     try {
       // Plain-text feedback from UDPS: "ANGLES:90,90,..." or "DATA:..."
       if (typeof e.data === "string" && e.data.startsWith("ANGLES:")) {
+        lastTeensyMsg = Date.now();
         applyAngles(e.data.slice(7).trim());
+        return;
+      }
+      if (typeof e.data === "string" && e.data.startsWith("DATA:")) {
+        lastTeensyMsg = Date.now();
         return;
       }
       const obj = JSON.parse(e.data);
       // Avatar arm echo: update slider/label + 3D sim without re-sending to server.
       if (obj.cmd === "servo") { setServoAngle(obj.id, obj.angle, false); return; }
-      if (obj.cmd === "avatar_status") {
-        const el = document.getElementById("avatar-placeholder");
-        if (el && controlMode === "avatar") el.textContent = obj.text;
-        return;
-      }
-      if (obj.T === 3) updateMotor(obj);
-      else if (obj.T === 21) log("[ESP32] " + obj.info);
+      if (obj.cmd === "avatar_status") { return; }
+      if (obj.T === 3) { lastEsp32Msg = Date.now(); updateMotor(obj); }
+      else if (obj.T === 21) { lastEsp32Msg = Date.now(); log("[ESP32] " + obj.info); }
     } catch(_) {}
   };
 }
@@ -96,6 +103,20 @@ function setStatus(connected) {
   document.getElementById("status-dot").className = connected ? "connected" : "";
   document.getElementById("status-text").textContent = connected ? "Connected" : "Disconnected";
 }
+
+// Light each board dot when its telemetry is fresh and the WS link is up.
+function updateBoardStatus() {
+  const open = ws && ws.readyState === WebSocket.OPEN;
+  const now  = Date.now();
+  const setDot = (id, alive) => {
+    const el = document.getElementById(id);
+    if (el) el.className = "board-dot" + (alive ? " on" : "");
+  };
+  setDot("ws-dot",     open);
+  setDot("esp32-dot",  open && (now - lastEsp32Msg)  < BOARD_TIMEOUT);
+  setDot("teensy-dot", open && (now - lastTeensyMsg) < BOARD_TIMEOUT);
+}
+setInterval(updateBoardStatus, 500);
 
 // ─── Log ──────────────────────────────────────────────────────────────────────
 const MAX_LOG = 80;

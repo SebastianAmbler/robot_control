@@ -27,10 +27,11 @@ except ImportError:
     serial = None   # Avatar mode unavailable until `pip install pyserial`
 
 # ─── Config ───────────────────────────────────────────────────────────────────
-PI_IP         = "192.168.1.101"   # <-- SET THIS to your Pi's IP address
+PI_IP         = "192.168.1.167"   # <-- SET THIS to your Pi's IP address
 UDP_CMD_PORT  = 3390              # port esp32_bridge listens on
 UDP_FB_PORT   = 3391              # port esp32_bridge sends feedback to
 UDP_SERVO_PORT = 3391             # port UDPS.py listens on for servo JSON packets
+UDP_ANGLES_PORT = 3392            # port UDPS.py forwards ANGLES:/DATA: readback to
 
 WS_HOST       = "0.0.0.0"
 WS_PORT       = 8765
@@ -83,6 +84,10 @@ DEFAULT_SETTINGS = {
 udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 udp_sock.bind(("0.0.0.0", UDP_FB_PORT))
 udp_sock.settimeout(0.1)
+
+angles_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+angles_sock.bind(("0.0.0.0", UDP_ANGLES_PORT))
+angles_sock.settimeout(0.1)
 
 connected_clients = set()
 
@@ -222,11 +227,13 @@ def run_http_server():
     server.serve_forever()
 
 
-def udp_feedback_thread(loop):
+def udp_feedback_thread(loop, sock=None):
     """Background thread: read UDP feedback from Pi, forward to all WS clients."""
+    if sock is None:
+        sock = udp_sock
     while True:
         try:
-            data, _ = udp_sock.recvfrom(256)
+            data, _ = sock.recvfrom(256)
             msg = data.decode("utf-8", errors="ignore").strip()
             if msg and connected_clients:
                 asyncio.run_coroutine_threadsafe(
@@ -468,13 +475,16 @@ async def main():
     http_thread = threading.Thread(target=run_http_server, daemon=True)
     http_thread.start()
     
-    # Start UDP feedback thread
+    # Start UDP feedback threads (ESP32 telemetry on 3391, servo ANGLES readback on 3392)
     t = threading.Thread(target=udp_feedback_thread, args=(loop,), daemon=True)
     t.start()
+    t2 = threading.Thread(target=udp_feedback_thread, args=(loop, angles_sock), daemon=True)
+    t2.start()
 
     print(f"[WS] Server running on ws://{WS_HOST}:{WS_PORT}")
     print(f"[WS] Forwarding UDP to {PI_IP}:{UDP_CMD_PORT}")
     print(f"[WS] Listening for UDP feedback on port {UDP_FB_PORT}")
+    print(f"[WS] Listening for servo angle readback on port {UDP_ANGLES_PORT}")
     print(f"[Settings] File-based storage enabled: {SETTINGS_FILE}")
     print(f"[HTTP]    Open  http://localhost:{HTTP_PORT}/control.html  in your browser.\n")
 

@@ -59,10 +59,6 @@ function updateModeUI() {
   show("kb-visual", controlMode === "keyboard");
   show("gamepad-status", controlMode === "controller");
   show("avatar-placeholder", controlMode === "avatar");
-  if (controlMode === "avatar") {
-    const el = document.getElementById("avatar-placeholder");
-    if (el) el.textContent = "Avatar arm → Shoulder / Elbow / Extend · keyboard still active";
-  }
   if (controlMode === "controller") updateGamepadStatusUI();
 }
 
