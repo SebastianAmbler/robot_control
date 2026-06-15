@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lidar / SLAM View</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; width: 100%; overflow: hidden; }
+  :root {
+    --bg:#0e0e0e; --surface:#161616; --surface2:#1e1e1e;
+    --border:#2a2a2a; --border2:#383838; --text:#d4d4d4; --muted:#666;
+    --accent:#c8ff00; --accent2:#8fb800; --warn:#ff6a00; --danger:#ff2d2d; --ok:#00cc66;
+    --font:'Courier New', Courier, monospace;
+  }
+  body { background:var(--bg); color:var(--text); font-family:var(--font); font-size:12px;
+         display:flex; flex-direction:column; height:100vh; }
+
+  /* toolbar */
+  #bar { display:flex; align-items:center; gap:10px; padding:6px 10px;
+         background:var(--surface); border-bottom:1px solid var(--border); flex-shrink:0; }
+  #dot { width:8px; height:8px; border-radius:50%; background:var(--danger); flex-shrink:0; }
+  #dot.on { background:var(--ok); }
+  #dot.wait { background:var(--warn); }
+  .lbl { font-size:10px; letter-spacing:0.15em; text-transform:uppercase; color:var(--muted); }
+  #wsAddr { background:var(--surface2); border:1px solid var(--border2); color:var(--accent);
+            font-family:var(--font); font-size:11px; padding:4px 8px; width:200px; outline:none; }
+  #wsAddr:focus { border-color:var(--accent2); }
+  button { background:transparent; border:1px solid var(--border2); color:var(--text);
+           font-family:var(--font); font-size:10px; letter-spacing:0.1em; text-transform:uppercase;
+           padding:4px 10px; cursor:pointer; white-space:nowrap; }
+  button:hover { border-color:var(--accent); color:var(--accent); }
+  button.active { border-color:var(--accent); color:var(--accent); background:rgba(200,255,0,0.06); }
+  .spacer { flex:1; }
+  #stat { font-size:10px; color:var(--muted); white-space:nowrap; }
+
+  /* canvas area */
+  #wrap { flex:1; position:relative; min-height:0; background:#080808; }
+  canvas { display:block; width:100%; height:100%; }
+  #hud { position:absolute; left:10px; bottom:10px; font-size:10px; color:var(--muted);
+         line-height:1.6; pointer-events:none; text-shadow:0 0 4px #000; }
+  #hud b { color:var(--accent); }
+</style>
+</head>
+<body>
+  <div id="bar">
+    <div id="dot" title="rosbridge link"></div>
+    <span class="lbl">ws://</span>
+    <input id="wsAddr" value="192.168.1.167:9090" />
+    <button id="btnConnect">Connect</button>
+    <button id="mScan" class="active" onclick="setMode('scan')">Scan</button>
+    <button id="mMap" onclick="setMode('map')">Map + Scan</button>
+    <div class="spacer"></div>
+    <button onclick="zoomBy(1.25)">+</button>
+    <button onclick="zoomBy(0.8)">−</button>
+    <button onclick="recenter()">Center</button>
+    <span id="stat">idle</span>
+  </div>
+  <div id="wrap">
+    <canvas id="cv"></canvas>
+    <div id="hud"></div>
+  </div>
+
+<script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
+<script>
+// ─── canvas setup ─────────────────────────────────────────────────────────────
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const hud = document.getElementById('hud');
+const dot = document.getElementById('dot');
+const stat = document.getElementById('stat');
+
+let DPR = window.devicePixelRatio || 1;
+function resize() {
+  DPR = window.devicePixelRatio || 1;
+  cv.width  = cv.clientWidth  * DPR;
+  cv.height = cv.clientHeight * DPR;
+}
+window.addEventListener('resize', resize);
+
+// ─── view state ───────────────────────────────────────────────────────────────
+let mode = 'scan';                 // 'scan' (robot-centric) | 'map' (world frame)
+let ppm = 60;                      // pixels per meter (zoom)
+let view = { x: 0, y: 0 };         // world point at canvas center (map mode)
+let follow = true;                 // keep robot centered in map mode
+
+function setMode(m) {
+  mode = m;
+  document.getElementById('mScan').classList.toggle('active', m === 'scan');
+  document.getElementById('mMap').classList.toggle('active', m === 'map');
+  recenter();
+}
+function zoomBy(f) { ppm = Math.max(6, Math.min(400, ppm * f)); }
+function recenter() { follow = true; view = { x: 0, y: 0 }; }
+
+cv.addEventListener('wheel', e => { e.preventDefault(); zoomBy(e.deltaY < 0 ? 1.1 : 0.9); }, { passive:false });
+// drag to pan (map mode)
+let drag = null;
+cv.addEventListener('mousedown', e => { drag = { x:e.clientX, y:e.clientY }; follow = false; });
+window.addEventListener('mouseup', () => drag = null);
+window.addEventListener('mousemove', e => {
+  if (!drag) return;
+  view.x -= (e.clientX - drag.x) / ppm;
+  view.y += (e.clientY - drag.y) / ppm;
+  drag = { x:e.clientX, y:e.clientY };
+});
+
+// ─── 2D rigid transforms {x, y, th} ───────────────────────────────────────────
+const I = { x:0, y:0, th:0 };
+function apply(T, px, py) {
+  const c = Math.cos(T.th), s = Math.sin(T.th);
+  return { x: T.x + px*c - py*s, y: T.y + px*s + py*c };
+}
+function compose(A, B) { // (A∘B): apply B then A
+  const c = Math.cos(A.th), s = Math.sin(A.th);
+  return { x: A.x + B.x*c - B.y*s, y: A.y + B.x*s + B.y*c, th: A.th + B.th };
+}
+function invert(T) {
+  const c = Math.cos(T.th), s = Math.sin(T.th);
+  return { x: -(T.x*c + T.y*s), y: (T.x*s - T.y*c), th: -T.th };
+}
+function yawOf(q) { // quaternion → yaw
+  return Math.atan2(2*(q.w*q.z + q.x*q.y), 1 - 2*(q.y*q.y + q.z*q.z));
+}
+
+// ─── TF tree (child → {parent, x, y, th}) ─────────────────────────────────────
+const tf = {};
+function setTf(parent, child, x, y, th) { tf[child] = { parent, x, y, th }; }
+function toRoot(frame) {       // composite mapping frame's points → root frame
+  let M = { ...I }, cur = frame, hops = 0;
+  while (tf[cur] && hops++ < 64) { const t = tf[cur]; M = compose(t, M); cur = t.parent; }
+  return { M, root: cur };
+}
+function resolve(src, dst) {   // transform mapping src points → dst frame, or null
+  const a = toRoot(src), b = toRoot(dst);
+  if (a.root !== b.root) return null;
+  return compose(invert(b.M), a.M);
+}
+
+// ─── latest messages ──────────────────────────────────────────────────────────
+let scan = null;     // sensor_msgs/LaserScan
+let mapMsg = null;   // nav_msgs/OccupancyGrid
+let mapImg = null;   // offscreen canvas for the occupancy grid
+let scanHz = 0, lastScanT = 0;
+
+function buildMapImage(m) {
+  const w = m.info.width, h = m.info.height;
+  if (!w || !h) { mapImg = null; return; }
+  const off = document.createElement('canvas');
+  off.width = w; off.height = h;
+  const octx = off.getContext('2d');
+  const img = octx.createImageData(w, h);
+  const d = m.data;
+  for (let row = 0; row < h; row++) {
+    // flip vertically: image row 0 = top = max world-y
+    const srcRow = (h - 1 - row) * w;
+    for (let col = 0; col < w; col++) {
+      const v = d[srcRow + col];
+      const o = (row * w + col) * 4;
+      let r, g, b;
+      if (v < 0)        { r = 22;  g = 22;  b = 22;  }   // unknown
+      else if (v < 25)  { r = 230; g = 230; b = 230; }   // free
+      else if (v < 65)  { r = 120; g = 120; b = 120; }   // uncertain
+      else              { r = 20;  g = 20;  b = 20;  }   // occupied
+      img.data[o] = r; img.data[o+1] = g; img.data[o+2] = b; img.data[o+3] = 255;
+    }
+  }
+  octx.putImageData(img, 0, 0);
+  mapImg = { canvas: off, info: m.info };
+}
+
+// ─── rosbridge connection ─────────────────────────────────────────────────────
+let ros = null;
+function setStatus(s, cls) { stat.textContent = s; dot.className = cls || ''; }
+
+function connect() {
+  const url = 'ws://' + document.getElementById('wsAddr').value.trim();
+  if (ros) { try { ros.close(); } catch(_){} }
+  setStatus('connecting ' + url, 'wait');
+  ros = new ROSLIB.Ros({ url });
+
+  ros.on('connection', () => {
+    setStatus('connected', 'on');
+    new ROSLIB.Topic({ ros, name:'/scan', messageType:'sensor_msgs/msg/LaserScan',
+                       throttle_rate: 80, queue_length: 1 })
+      .subscribe(m => { scan = m; const t = performance.now();
+        if (lastScanT) scanHz = 0.8*scanHz + 0.2*(1000/(t-lastScanT)); lastScanT = t; });
+
+    new ROSLIB.Topic({ ros, name:'/map', messageType:'nav_msgs/msg/OccupancyGrid' })
+      .subscribe(m => { mapMsg = m; buildMapImage(m); });
+
+    const onTf = m => m.transforms.forEach(t =>
+      setTf(t.header.frame_id, t.child_frame_id,
+            t.transform.translation.x, t.transform.translation.y, yawOf(t.transform.rotation)));
+    new ROSLIB.Topic({ ros, name:'/tf', messageType:'tf2_msgs/msg/TFMessage' }).subscribe(onTf);
+    new ROSLIB.Topic({ ros, name:'/tf_static', messageType:'tf2_msgs/msg/TFMessage' }).subscribe(onTf);
+  });
+  ros.on('error', () => setStatus('error — check rosbridge / IP', ''));
+  ros.on('close', () => setStatus('disconnected', ''));
+}
+document.getElementById('btnConnect').onclick = connect;
+
+// ─── render loop ──────────────────────────────────────────────────────────────
+function worldToScreen(wx, wy, cx, cy) {
+  return { x: cx + (wx - view.x) * ppm, y: cy - (wy - view.y) * ppm };
+}
+
+function draw() {
+  requestAnimationFrame(draw);
+  const W = cv.width, H = cv.height, cx = W/2, cy = H/2;
+  ctx.clearRect(0, 0, W, H);
+  ctx.save();
+  ctx.scale(1, 1);
+
+  if (mode === 'scan') drawScanCentric(cx, cy);
+  else                 drawMap(cx, cy);
+
+  ctx.restore();
+  hud.innerHTML = `mode <b>${mode}</b> &nbsp; zoom <b>${(ppm).toFixed(0)} px/m</b>` +
+    (scan ? ` &nbsp; scan <b>${scanHz.toFixed(1)} Hz</b>` : ' &nbsp; <b>no /scan</b>') +
+    (mapMsg ? ` &nbsp; map <b>${mapMsg.info.width}×${mapMsg.info.height}</b>` : '');
+}
+
+// robot-centric radar: robot at center, forward = up. No TF needed.
+function drawScanCentric(cx, cy) {
+  // range rings every 1 m
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = 1 * DPR;
+  for (let r = 1; r * ppm < Math.max(cx, cy) * 1.2; r++) {
+    ctx.beginPath(); ctx.arc(cx, cy, r * ppm, 0, Math.PI*2); ctx.stroke();
+  }
+  // robot marker
+  drawRobot(cx, cy, Math.PI/2);   // pointing up
+
+  if (!scan) return;
+  ctx.fillStyle = '#c8ff00';
+  for (let i = 0; i < scan.ranges.length; i++) {
+    const r = scan.ranges[i];
+    if (!isFinite(r) || r < scan.range_min || r > scan.range_max) continue;
+    const a = scan.angle_min + i * scan.angle_increment;
+    const lx = r * Math.cos(a), ly = r * Math.sin(a);   // laser frame (x fwd, y left)
+    const sx = cx - ly * ppm;                            // +y(left) → screen left
+    const sy = cy - lx * ppm;                            // +x(fwd)  → screen up
+    const t = r / scan.range_max;
+    ctx.fillStyle = `rgb(${200 - t*120|0},${255 - t*90|0},${0 + t*40|0})`;
+    ctx.fillRect(sx - DPR, sy - DPR, 2.4*DPR, 2.4*DPR);
+  }
+}
+
+// world-frame map view with scan + robot placed via TF
+function drawMap(cx, cy) {
+  // follow robot if we can find its pose
+  const base = tf['base_footprint'] ? 'base_footprint' : (tf['base_link'] ? 'base_link' : null);
+  let robot = null;
+  if (base) { const T = resolve(base, 'map'); if (T) robot = T; }
+  if (follow && robot) { view.x = robot.x; view.y = robot.y; }
+
+  // draw occupancy grid
+  if (mapImg) {
+    const o = mapImg.info, res = o.resolution;
+    const topLeftW = { x: o.origin.position.x, y: o.origin.position.y + o.height * res };
+    const p = worldToScreen(topLeftW.x, topLeftW.y, cx, cy);
+    const dw = o.width  * res * ppm, dh = o.height * res * ppm;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(mapImg.canvas, p.x, p.y, dw, dh);
+  } else {
+    ctx.fillStyle = 'var(--muted)';
+  }
+
+  // scan, transformed into map frame
+  if (scan) {
+    const frame = scan.header.frame_id || 'laser_frame';
+    const T = resolve(frame, 'map');
+    if (T) {
+      for (let i = 0; i < scan.ranges.length; i++) {
+        const r = scan.ranges[i];
+        if (!isFinite(r) || r < scan.range_min || r > scan.range_max) continue;
+        const a = scan.angle_min + i * scan.angle_increment;
+        const w = apply(T, r*Math.cos(a), r*Math.sin(a));
+        const s = worldToScreen(w.x, w.y, cx, cy);
+        ctx.fillStyle = '#c8ff00';
+        ctx.fillRect(s.x - DPR, s.y - DPR, 2.4*DPR, 2.4*DPR);
+      }
+    }
+  }
+
+  // robot
+  if (robot) {
+    const s = worldToScreen(robot.x, robot.y, cx, cy);
+    drawRobot(s.x, s.y, robot.th);
+  }
+}
+
+function drawRobot(sx, sy, th) {
+  // triangle pointing along th (screen: +x right, +y down, world +y up → negate)
+  const size = 9 * DPR;
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.rotate(-th);                 // world yaw → screen (y flipped)
+  ctx.beginPath();
+  ctx.moveTo(size, 0);
+  ctx.lineTo(-size*0.7, size*0.7);
+  ctx.lineTo(-size*0.7, -size*0.7);
+  ctx.closePath();
+  ctx.fillStyle = '#ff6a00';
+  ctx.fill();
+  ctx.restore();
+}
+
+// ─── boot ─────────────────────────────────────────────────────────────────────
+resize();
+draw();
+connect();   // auto-connect on load
+</script>
+</body>
+</html>
