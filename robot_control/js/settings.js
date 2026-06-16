@@ -8,6 +8,7 @@
 function saveSettings() {
   localStorage.setItem("rc_settings", JSON.stringify({
     wsUrl:       document.getElementById("ws-input").value,
+    lidarWsUrl:  document.getElementById("lidar-ws-input").value,
     autoConnect: document.getElementById("auto-connect-chk").checked,
     autoBrake:   document.getElementById("auto-brake-chk").checked,
     simFromUDPS: document.getElementById("sim-from-udps-chk").checked,
@@ -19,6 +20,10 @@ function loadSettings() {
   try {
     const s = JSON.parse(localStorage.getItem("rc_settings") || "{}");
     if (s.wsUrl)      document.getElementById("ws-input").value = s.wsUrl;
+    if (s.lidarWsUrl) {
+      document.getElementById("lidar-ws-input").value = s.lidarWsUrl;
+      if (typeof applyLidarWs === "function") applyLidarWs(true);
+    }
     if (s.autoBrake)  {
       autoBrake = true;
       document.getElementById("auto-brake-chk").checked = true;

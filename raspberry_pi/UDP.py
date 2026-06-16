@@ -164,16 +164,17 @@ class ESP32Bridge:
                 print(f"[UDP IN]  Error: {e}")
                 continue
 
-            # Drain any additional packets that arrived — keep only the latest
-            # This prevents stale motion packets queuing ahead of a stop
-            latest = data
-            latest_addr = addr
+            # Drain any additional packets that arrived in the same burst.
+            # Motion packets are coalesced (keep only the latest — this prevents
+            # stale motion queuing ahead of a stop), but lock packets must NEVER
+            # be dropped: a brake-release sent just before a motion packet would
+            # otherwise be discarded, leaving the motors stuck locked.
+            batch = [(data, addr)]
             while True:
                 try:
                     self.udp_in.setblocking(False)
                     newer, newer_addr = self.udp_in.recvfrom(64)
-                    latest = newer
-                    latest_addr = newer_addr
+                    batch.append((newer, newer_addr))
                 except BlockingIOError:
                     break
                 except Exception:
@@ -182,14 +183,21 @@ class ESP32Bridge:
                     self.udp_in.settimeout(1.0)
 
             self._last_recv = time.time()
-            self.pc_addr = (latest_addr[0], FEEDBACK_PORT)
 
-            if len(latest) == self.MOTION_PACKET_SIZE:
-                self._handle_motion(latest, latest_addr)
-            elif len(latest) == self.LOCK_PACKET_SIZE:
-                self._handle_lock(latest, latest_addr)
-            else:
-                print(f"[UDP IN]  Unknown packet: {len(latest)} bytes from {latest_addr}")
+            # Process lock packets in arrival order; defer motion to the latest one
+            # so unlock-then-move (and stop-then-brake) sequences apply correctly.
+            latest_motion = None
+            for pkt, paddr in batch:
+                self.pc_addr = (paddr[0], FEEDBACK_PORT)
+                if len(pkt) == self.LOCK_PACKET_SIZE:
+                    self._handle_lock(pkt, paddr)
+                elif len(pkt) == self.MOTION_PACKET_SIZE:
+                    latest_motion = (pkt, paddr)
+                else:
+                    print(f"[UDP IN]  Unknown packet: {len(pkt)} bytes from {paddr}")
+
+            if latest_motion is not None:
+                self._handle_motion(*latest_motion)
 
     # ── watchdog: stop motors if PC goes silent ───────────────────────────────
     def _watchdog_loop(self):

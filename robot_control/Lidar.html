@@ -40,6 +40,10 @@
   #hud { position:absolute; left:10px; bottom:10px; font-size:10px; color:var(--muted);
          line-height:1.6; pointer-events:none; text-shadow:0 0 4px #000; }
   #hud b { color:var(--accent); }
+
+  /* embed mode (inside control.html): show only the lidar display */
+  body.embed #bar { display:none; }
+  body.embed #hud { display:none; }
 </style>
 </head>
 <body>
@@ -83,15 +87,17 @@ let mode = 'scan';                 // 'scan' (robot-centric) | 'map' (world fram
 let ppm = 60;                      // pixels per meter (zoom)
 let view = { x: 0, y: 0 };         // world point at canvas center (map mode)
 let follow = true;                 // keep robot centered in map mode
+let mapFitted = false;             // auto-fit zoom to the map once (when no robot pose)
 
 function setMode(m) {
   mode = m;
   document.getElementById('mScan').classList.toggle('active', m === 'scan');
   document.getElementById('mMap').classList.toggle('active', m === 'map');
   recenter();
+  if (m === 'map') subscribeMap();   // re-fetch the latched map in case it was missed
 }
 function zoomBy(f) { ppm = Math.max(6, Math.min(400, ppm * f)); }
-function recenter() { follow = true; view = { x: 0, y: 0 }; }
+function recenter() { follow = true; view = { x: 0, y: 0 }; mapFitted = false; }
 
 cv.addEventListener('wheel', e => { e.preventDefault(); zoomBy(e.deltaY < 0 ? 1.1 : 0.9); }, { passive:false });
 // drag to pan (map mode)
@@ -171,7 +177,18 @@ function buildMapImage(m) {
 
 // ─── rosbridge connection ─────────────────────────────────────────────────────
 let ros = null;
+let mapTopic = null;
 function setStatus(s, cls) { stat.textContent = s; dot.className = cls || ''; }
+
+// (Re)subscribe to /map. The grid is latched/transient, so a fresh subscribe is
+// the reliable way to (re)fetch the last map — used on connect and when entering
+// map mode (the one-time latched delivery can be missed during a busy page load).
+function subscribeMap() {
+  if (!ros) return;
+  try { if (mapTopic) mapTopic.unsubscribe(); } catch (_) {}
+  mapTopic = new ROSLIB.Topic({ ros, name:'/map', messageType:'nav_msgs/msg/OccupancyGrid' });
+  mapTopic.subscribe(m => { mapMsg = m; buildMapImage(m); });
+}
 
 function connect() {
   const url = 'ws://' + document.getElementById('wsAddr').value.trim();
@@ -186,8 +203,7 @@ function connect() {
       .subscribe(m => { scan = m; const t = performance.now();
         if (lastScanT) scanHz = 0.8*scanHz + 0.2*(1000/(t-lastScanT)); lastScanT = t; });
 
-    new ROSLIB.Topic({ ros, name:'/map', messageType:'nav_msgs/msg/OccupancyGrid' })
-      .subscribe(m => { mapMsg = m; buildMapImage(m); });
+    subscribeMap();
 
     const onTf = m => m.transforms.forEach(t =>
       setTf(t.header.frame_id, t.child_frame_id,
@@ -253,7 +269,28 @@ function drawMap(cx, cy) {
   const base = tf['base_footprint'] ? 'base_footprint' : (tf['base_link'] ? 'base_link' : null);
   let robot = null;
   if (base) { const T = resolve(base, 'map'); if (T) robot = T; }
-  if (follow && robot) { view.x = robot.x; view.y = robot.y; }
+
+  // No SLAM map and no robot pose yet (TF tree not connected to 'map') →
+  // fall back to the robot-centric scan so the view isn't blank.
+  if (!mapImg && !robot) { drawScanCentric(cx, cy); return; }
+
+  if (follow) {
+    if (robot) {
+      view.x = robot.x; view.y = robot.y;
+    } else if (mapImg) {
+      // No robot TF — center on the map so it isn't drawn off-screen,
+      // and fit the zoom to the (small, embedded) canvas once.
+      const o = mapImg.info, res = o.resolution;
+      view.x = o.origin.position.x + o.width  * res / 2;
+      view.y = o.origin.position.y + o.height * res / 2;
+      if (!mapFitted) {
+        const mw = o.width * res, mh = o.height * res;
+        if (mw > 0 && mh > 0)
+          ppm = Math.max(6, Math.min(400, 0.9 * Math.min(cv.width / mw, cv.height / mh)));
+        mapFitted = true;
+      }
+    }
+  }
 
   // draw occupancy grid
   if (mapImg) {
@@ -308,6 +345,7 @@ function drawRobot(sx, sy, th) {
 }
 
 // ─── boot ─────────────────────────────────────────────────────────────────────
+if (location.hash.includes('embed') || location.search.includes('embed')) document.body.classList.add('embed');
 resize();
 draw();
 connect();   // auto-connect on load

@@ -561,8 +561,9 @@
   }
   .rpm-pair {
     display: flex;
-    gap: 10px;
-    align-items: flex-end;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-start;
   }
   .rpm-col { text-align: center; }
 
@@ -602,11 +603,13 @@
     right: 16px;
     bottom: 16px;
     z-index: 90;
+    width: 72px;
     font-family: var(--font);
-    font-size: 11px;
+    font-size: 9px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    padding: 8px 14px;
+    text-align: center;
+    padding: 4px 8px;
     background: var(--surface);
     border: 1px solid var(--border2);
     color: var(--text);
@@ -1031,6 +1034,59 @@
     min-height: 0;
   }
 
+  /* ── Lidar / SLAM section (footer, right-center) ── */
+  #lidar-section {
+    position: absolute;
+    right: 260px;
+    top: 6px;
+    bottom: 6px;
+    width: 320px;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border);
+    background: #080808;
+    overflow: hidden;
+    z-index: 1;
+  }
+  #lidar-iframe {
+    flex: 1;
+    width: 100%;
+    border: none;
+    background: #080808;
+    display: block;
+    min-height: 0;
+  }
+  /* ── Lidar mode toggle (Scan / Map), stacked above the webcam button ── */
+  #lidar-modes {
+    position: fixed;
+    right: 16px;
+    bottom: 44px;
+    z-index: 90;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .lidar-mode-btn {
+    width: 72px;
+    font-family: var(--font);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-align: center;
+    padding: 4px 8px;
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .lidar-mode-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .lidar-mode-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(200,255,0,0.06);
+  }
+
   /* ── Motor status section ── */
   #motor-section {
     align-self: stretch;
@@ -1372,6 +1428,12 @@
 
   <div id="footer-right">
     <div id="board-status">
+      <div class="board-row" title="IMU sensor connection">
+        <span class="board-dot" id="imu-dot"></span><span class="board-name">IMU</span>
+      </div>
+      <div class="board-row" title="Lidar / SLAM sensor connection">
+        <span class="board-dot" id="lidar-dot"></span><span class="board-name">Lidar</span>
+      </div>
       <div class="board-row" title="WebSocket link to ws_server.py (PC bridge)">
         <span class="board-dot" id="ws-dot"></span><span class="board-name">WebSocket</span>
       </div>
@@ -1393,6 +1455,17 @@
       </div>
     </div>
   </div>
+
+  <!-- LIDAR / SLAM display (self-contained view embedded via iframe, like the sim) -->
+  <div id="lidar-section">
+    <iframe id="lidar-iframe" src="http://localhost:8766/Lidar.html#embed" scrolling="no" allowfullscreen onload="applyLidarWs(true)"></iframe>
+  </div>
+  <div id="lidar-modes">
+    <button id="slam-toggle-btn" class="lidar-mode-btn" onclick="slamToggle()">SLAM</button>
+    <button id="map-save-btn" class="lidar-mode-btn" onclick="mapSave()">Save Map</button>
+    <button id="lidar-mode-scan" class="lidar-mode-btn active" onclick="setLidarMode('scan')">Scan</button>
+    <button id="lidar-mode-map" class="lidar-mode-btn" onclick="setLidarMode('map')">Map</button>
+  </div>
 </div>
 
 <!-- WEBCAM TOGGLE BUTTON (floating, bottom-right) -->
@@ -1413,6 +1486,12 @@
         </div>
         <div class="setting-row">
           <input type="text" id="ws-input" value="ws://localhost:8765" placeholder="ws://host:port" />
+        </div>
+        <div class="setting-row" style="margin-top:4px;">
+          <label for="lidar-ws-input">Lidar WebSocket URL</label>
+        </div>
+        <div class="setting-row">
+          <input type="text" id="lidar-ws-input" value="ws://192.168.1.167:9090" placeholder="ws://host:9090" onchange="applyLidarWs(true); saveSettings();" />
         </div>
         <div class="setting-row" style="margin-top:4px;">
           <label for="auto-connect-chk">Auto-reconnect</label>
@@ -1681,5 +1760,46 @@
 <script src="js/controller.js"></script>
 <script src="js/settings.js"></script>
 <script src="js/main.js"></script>
+<script>
+  // Lidar Scan/Map toggle — drives the embedded (same-origin) Lidar.html view.
+  function setLidarMode(m) {
+    var f = document.getElementById('lidar-iframe');
+    try { f.contentWindow.setMode(m); } catch (e) { /* iframe not ready yet */ }
+    document.getElementById('lidar-mode-scan').classList.toggle('active', m === 'scan');
+    document.getElementById('lidar-mode-map').classList.toggle('active', m === 'map');
+  }
+
+  // Placeholders — wire up to ROS service calls later.
+  var slamOn = false;
+  function slamToggle() {
+    slamOn = !slamOn;
+    document.getElementById('slam-toggle-btn').classList.toggle('active', slamOn);
+    if (typeof log === 'function') log('SLAM ' + (slamOn ? 'on' : 'off') + ' (placeholder)', 'info');
+  }
+  function mapSave() {
+    if (typeof log === 'function') log('Map save (placeholder)', 'info');
+  }
+
+  // Push the configured rosbridge address into the embedded (same-origin) Lidar.html
+  // view. Lidar.html's input wants host:port (it prepends ws://), so strip the scheme.
+  function applyLidarWs(connectNow) {
+    var inp = document.getElementById('lidar-ws-input');
+    if (!inp) return;
+    var v = inp.value.trim();
+    if (!v) return;
+    var hostport = v.replace(/^wss?:\/\//, '');
+    var f = document.getElementById('lidar-iframe');
+    try {
+      var w = f.contentWindow;
+      var addr = w.document.getElementById('wsAddr');
+      if (!addr) return;
+      // Already on this address — leave the lidar's existing connection alone.
+      // Reconnecting churns rosbridge and can drop the latched /map (no map shown).
+      if (addr.value === hostport) return;
+      addr.value = hostport;
+      if (connectNow && typeof w.connect === 'function') w.connect();
+    } catch (e) { /* iframe not ready / cross-origin */ }
+  }
+</script>
 </body>
 </html>
