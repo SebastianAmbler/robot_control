@@ -296,6 +296,46 @@ function loadParams() {
     });
 }
 
+// ─── Cameras (Parameters ↔ CAMERAS global) ────────────────────────────────────
+// Merge a loaded settings.json `cameras` array into the CAMERAS global.
+function mergeCameraSettings(arr) {
+  if (!Array.isArray(arr)) return;
+  for (let i = 0; i < CAMERAS.length; i++) {
+    const c = arr[i];
+    if (!c) continue;
+    if (typeof c.proto === "string") CAMERAS[i].proto = c.proto;
+    if (typeof c.url   === "string") CAMERAS[i].url   = c.url;
+    const z = Number(c.zoom);
+    if (Number.isFinite(z) && z >= 20 && z <= 100) CAMERAS[i].zoom = z;
+  }
+}
+
+// Reflect the CAMERAS global into the Parameters inputs and zoom sliders.
+function applyCamerasToParams() {
+  CAMERAS.forEach((c, i) => {
+    const proto = document.getElementById("cam-proto-" + i);
+    const url   = document.getElementById("cam-url-" + i);
+    const zoom  = document.getElementById("camZoom" + i);
+    const zVal  = document.getElementById("camZoomVal" + i);
+    if (proto) proto.value = c.proto;
+    if (url)   url.value   = c.url;
+    if (zoom)  zoom.value  = c.zoom;
+    if (zVal)  zVal.textContent = c.zoom + "%";
+  });
+}
+
+// Read the Parameters inputs (and live zoom sliders) back into CAMERAS.
+function readCamerasFromParams() {
+  CAMERAS.forEach((c, i) => {
+    const proto = document.getElementById("cam-proto-" + i);
+    const url   = document.getElementById("cam-url-" + i);
+    const zoom  = document.getElementById("camZoom" + i);
+    if (proto) c.proto = proto.value;
+    if (url)   c.url   = url.value.trim();
+    if (zoom)  { const z = parseInt(zoom.value, 10); if (!isNaN(z)) c.zoom = z; }
+  });
+}
+
 function saveParams() {
   // Update GEARS array from form
   for (let i = 0; i < GEARS.length; i++) {
@@ -322,6 +362,7 @@ function saveParams() {
   readHotkeysFromParams();
   readServoLimitsFromParams();
   readAvatarCalibFromParams();
+  readCamerasFromParams();
 
   // Update SIM_INIT from form
   SIM_KEYS.forEach(k => {
@@ -356,6 +397,8 @@ function saveParams() {
       hotkeys: HOTKEYS,
       servoLimits: servoLimitsMap(),
       avatar: avatarCalibMap(),
+      imuZero: IMU_ZERO,
+      cameras: CAMERAS,
     })
   })
   .then(r => r.json())
@@ -404,6 +447,7 @@ function resetParams() {
       hotkeys: JSON.parse(JSON.stringify(HOTKEYS_DEFAULTS)),
       servoLimits: Object.fromEntries(SERVO_LIMIT_DEFAULTS.map(s => [s.id, { min: s.min, max: s.max }])),
       avatar: { deadband: AVATAR_DEADBAND_DEFAULT, calib: AVATAR_CALIB_DEFAULTS.map(c => ({ ...c })) },
+      imuZero: { roll: 0, pitch: 0 },
     };
 
     fetch("http://localhost:8766/api/settings", {
@@ -420,6 +464,7 @@ function resetParams() {
         if (defaults.simInit[k]) { SIM_INIT[k].cur = defaults.simInit[k].cur; SIM_INIT[k].tgt = defaults.simInit[k].tgt; }
         if (defaults.simCal[k])  { SIM_CAL[k].n = defaults.simCal[k].n; SIM_CAL[k].dir = defaults.simCal[k].dir; SIM_CAL[k].scale = defaults.simCal[k].scale; }
       });
+      IMU_ZERO = { roll: 0, pitch: 0 };
       applyServoLimits(defaults.servoLimits);
       applyAvatarCalib(defaults.avatar);
       loadPostures(defaults);
@@ -481,15 +526,21 @@ function loadParamSettings() {
           }
         });
       }
+      if (p.imuZero && Number.isFinite(Number(p.imuZero.roll)) && Number.isFinite(Number(p.imuZero.pitch))) {
+        IMU_ZERO = { roll: Number(p.imuZero.roll), pitch: Number(p.imuZero.pitch) };
+      }
       applyServoLimits(p.servoLimits);
       applyAvatarCalib(p.avatar);
       loadPostures(p);
       mergeControllerSettings(p.controller);
       mergeHotkeySettings(p.hotkeys);
+      mergeCameraSettings(p.cameras);
       // Rebuild UI with loaded settings
       buildGearUI();
       buildServoUI();
       buildPostureUI();
+      applyCamerasToParams();
+      if (typeof initCameras === "function") initCameras();
       log("Gears: " + GEARS.map((g,i) => `G${i+1}=${g}`).join("  "));
       // Push initial sim state after a short delay (give iframe time to load)
       setTimeout(() => pushSimFromSliders(), 1500);
@@ -500,6 +551,8 @@ function loadParamSettings() {
       buildGearUI();
       buildServoUI();
       buildPostureUI();
+      applyCamerasToParams();
+      if (typeof initCameras === "function") initCameras();
       log("Gears: " + GEARS.map((g,i) => `G${i+1}=${g}`).join("  "));
       setTimeout(() => pushSimFromSliders(), 1500);
     });

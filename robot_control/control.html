@@ -137,10 +137,12 @@
     justify-content: center;
     gap: 6px;
     position: relative;
+    overflow: hidden;
   }
   .cam-label {
     position: absolute;
     top: 8px; left: 10px;
+    z-index: 3;
     font-size: 10px;
     letter-spacing: 0.15em;
     text-transform: uppercase;
@@ -150,12 +152,87 @@
     width: 32px; height: 32px;
     opacity: 0.12;
   }
-  .cam-feed span {
+  .cam-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .cam-placeholder span {
     font-size: 10px;
     letter-spacing: 0.15em;
     color: var(--muted);
     opacity: 0.5;
   }
+  /* Live feed: the camera's own web page, shrunk via transform: scale() */
+  .cam-iframe {
+    position: absolute;
+    top: 0; left: 0;
+    border: none;
+    display: none;
+    background: #000;
+    transform-origin: top left;
+  }
+  /* Small per-pane controls layered above the feed (top-right corner) */
+  .cam-connect-btn {
+    position: absolute;
+    top: 6px; right: 8px;
+    z-index: 3;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    padding: 3px 7px;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  .cam-connect-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .cam-connect-btn.live {
+    background: #06281a;
+    border-color: var(--ok);
+    color: var(--ok);
+    animation: cam-livepulse 2s ease-in-out infinite;
+  }
+  .cam-connect-btn.err {
+    background: #3d1515;
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+  @keyframes cam-livepulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+  .cam-zoom-row {
+    position: absolute;
+    top: 30px; right: 8px;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(7,10,18,0.7);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+  .cam-zoom-row input[type="range"] { width: 70px; }
+  .cam-zoom-val {
+    font-size: 9px;
+    color: var(--muted);
+    min-width: 28px;
+    text-align: right;
+  }
+  .cam-status-badge {
+    position: absolute;
+    bottom: 8px; left: 8px;
+    z-index: 3;
+    background: rgba(7,10,18,0.85);
+    border: 1px solid var(--border);
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+  }
+  .cam-status-badge.live { border-color: #00cc6660; color: var(--ok); }
+  .cam-status-badge.err  { border-color: #ff2d2d60; color: var(--danger); }
 
   /* ── Footer ── */
   #footer {
@@ -1315,23 +1392,41 @@
 
 <!-- CENTER -->
 <div id="center">
-  <div class="cam-feed">
+  <div class="cam-feed" id="camCell0">
     <div class="cam-label">CAM 1</div>
-    <svg class="cam-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-      <rect x="2" y="6" width="20" height="14" rx="2"/>
-      <circle cx="12" cy="13" r="4"/>
-      <path d="M8 6V4h8v2"/>
-    </svg>
-    <span>No signal</span>
+    <button class="cam-connect-btn" id="camBtn0" onclick="toggleCam(0)">CONNECT</button>
+    <div class="cam-zoom-row">
+      <input type="range" min="20" max="100" value="50" step="5" id="camZoom0" oninput="setCamZoom(0, this.value)" />
+      <span class="cam-zoom-val" id="camZoomVal0">50%</span>
+    </div>
+    <div class="cam-placeholder" id="camPh0">
+      <svg class="cam-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="2" y="6" width="20" height="14" rx="2"/>
+        <circle cx="12" cy="13" r="4"/>
+        <path d="M8 6V4h8v2"/>
+      </svg>
+      <span>No signal</span>
+    </div>
+    <iframe id="camImg0" class="cam-iframe" title="Camera 1" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+    <div class="cam-status-badge" id="camStat0">OFFLINE</div>
   </div>
-  <div class="cam-feed">
+  <div class="cam-feed" id="camCell1">
     <div class="cam-label">CAM 2</div>
-    <svg class="cam-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-      <rect x="2" y="6" width="20" height="14" rx="2"/>
-      <circle cx="12" cy="13" r="4"/>
-      <path d="M8 6V4h8v2"/>
-    </svg>
-    <span>No signal</span>
+    <button class="cam-connect-btn" id="camBtn1" onclick="toggleCam(1)">CONNECT</button>
+    <div class="cam-zoom-row">
+      <input type="range" min="20" max="100" value="50" step="5" id="camZoom1" oninput="setCamZoom(1, this.value)" />
+      <span class="cam-zoom-val" id="camZoomVal1">50%</span>
+    </div>
+    <div class="cam-placeholder" id="camPh1">
+      <svg class="cam-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="2" y="6" width="20" height="14" rx="2"/>
+        <circle cx="12" cy="13" r="4"/>
+        <path d="M8 6V4h8v2"/>
+      </svg>
+      <span>No signal</span>
+    </div>
+    <iframe id="camImg1" class="cam-iframe" title="Camera 2" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+    <div class="cam-status-badge" id="camStat1">OFFLINE</div>
   </div>
 
   <!-- WEBCAM OVERLAY (covers the two camera panes only) -->
@@ -1368,7 +1463,7 @@
       <span id="sim-label">Sim</span>
       <span id="sim-source-tag">client</span>
     </div>
-    <iframe id="sim-iframe" src="http://localhost:8766/index.html" scrolling="no" allowfullscreen></iframe>
+    <iframe id="sim-iframe" src="index.html" scrolling="no" allowfullscreen></iframe>
   </div>
 
   <div id="motor-section">
@@ -1458,7 +1553,7 @@
 
   <!-- LIDAR / SLAM display (self-contained view embedded via iframe, like the sim) -->
   <div id="lidar-section">
-    <iframe id="lidar-iframe" src="http://localhost:8766/Lidar.html#embed" scrolling="no" allowfullscreen onload="applyLidarWs(true)"></iframe>
+    <iframe id="lidar-iframe" src="Lidar.html#embed" scrolling="no" allowfullscreen onload="applyLidarWs(true)"></iframe>
   </div>
   <div id="lidar-modes">
     <button id="slam-toggle-btn" class="lidar-mode-btn" onclick="slamToggle()">SLAM</button>
@@ -1571,6 +1666,30 @@
         <div class="param-row">
           <label>Critical</label>
           <input type="number" id="tmp-crit" min="0" max="120" step="1">
+        </div>
+      </div>
+
+      <div class="param-group">
+        <div class="param-group-label">Cameras (IP / host)</div>
+        <div class="param-row">
+          <label>CAM 1</label>
+          <span style="display:flex; gap:4px;">
+            <select id="cam-proto-0">
+              <option value="http://">http://</option>
+              <option value="https://">https://</option>
+            </select>
+            <input type="text" id="cam-url-0" placeholder="192.168.1.x or host:port" spellcheck="false">
+          </span>
+        </div>
+        <div class="param-row">
+          <label>CAM 2</label>
+          <span style="display:flex; gap:4px;">
+            <select id="cam-proto-1">
+              <option value="http://">http://</option>
+              <option value="https://">https://</option>
+            </select>
+            <input type="text" id="cam-url-1" placeholder="192.168.1.x or host:port" spellcheck="false">
+          </span>
         </div>
       </div>
 
@@ -1761,27 +1880,49 @@
 <script src="js/settings.js"></script>
 <script src="js/main.js"></script>
 <script>
-  // Lidar Scan/Map toggle — drives the embedded (same-origin) Lidar.html view.
+  // Lidar Scan/Map toggle — drives the embedded Lidar.html view via postMessage.
+  // postMessage (not a direct f.contentWindow.setMode call) is required so this
+  // keeps working when control.html is opened cross-origin or via file://, where
+  // direct cross-frame scripting is blocked by the browser.
   function setLidarMode(m) {
     var f = document.getElementById('lidar-iframe');
-    try { f.contentWindow.setMode(m); } catch (e) { /* iframe not ready yet */ }
+    try { f.contentWindow.postMessage({ type: 'setMode', mode: m }, '*'); } catch (e) { /* iframe not ready yet */ }
     document.getElementById('lidar-mode-scan').classList.toggle('active', m === 'scan');
     document.getElementById('lidar-mode-map').classList.toggle('active', m === 'map');
   }
 
-  // Placeholders — wire up to ROS service calls later.
+  // SLAM / Save Map drive ROS std_srvs/Trigger services on the Pi. We can't call
+  // them directly (the lidar iframe owns the rosbridge connection), so we relay
+  // requests to it via postMessage and react to the {type:'slamResult'} reply.
   var slamOn = false;
+  function lidarPost(msg) {
+    var f = document.getElementById('lidar-iframe');
+    try { f.contentWindow.postMessage(msg, '*'); } catch (e) { /* iframe not ready yet */ }
+  }
   function slamToggle() {
     slamOn = !slamOn;
     document.getElementById('slam-toggle-btn').classList.toggle('active', slamOn);
-    if (typeof log === 'function') log('SLAM ' + (slamOn ? 'on' : 'off') + ' (placeholder)', 'info');
+    lidarPost({ type: slamOn ? 'slamStart' : 'slamStop' });
   }
   function mapSave() {
-    if (typeof log === 'function') log('Map save (placeholder)', 'info');
+    lidarPost({ type: 'mapSave' });
   }
 
-  // Push the configured rosbridge address into the embedded (same-origin) Lidar.html
-  // view. Lidar.html's input wants host:port (it prepends ws://), so strip the scheme.
+  window.addEventListener('message', function (e) {
+    var d = e.data;
+    if (!d || typeof d !== 'object' || d.type !== 'slamResult') return;
+    if (typeof log === 'function') log(d.message, d.success ? 'info' : 'error');
+    // A failed start/stop leaves the hardware in its prior state — revert the button.
+    if (!d.success && (d.cmd === 'start' || d.cmd === 'stop')) {
+      slamOn = !slamOn;
+      document.getElementById('slam-toggle-btn').classList.toggle('active', slamOn);
+    }
+  });
+
+  // Push the configured rosbridge address into the embedded Lidar.html view via
+  // postMessage (works cross-origin / file://, unlike direct DOM access). Lidar.html's
+  // input wants host:port (it prepends ws://), so strip the scheme. The iframe itself
+  // skips reconnecting if it's already on this address, so the latched /map is kept.
   function applyLidarWs(connectNow) {
     var inp = document.getElementById('lidar-ws-input');
     if (!inp) return;
@@ -1789,16 +1930,7 @@
     if (!v) return;
     var hostport = v.replace(/^wss?:\/\//, '');
     var f = document.getElementById('lidar-iframe');
-    try {
-      var w = f.contentWindow;
-      var addr = w.document.getElementById('wsAddr');
-      if (!addr) return;
-      // Already on this address — leave the lidar's existing connection alone.
-      // Reconnecting churns rosbridge and can drop the latched /map (no map shown).
-      if (addr.value === hostport) return;
-      addr.value = hostport;
-      if (connectNow && typeof w.connect === 'function') w.connect();
-    } catch (e) { /* iframe not ready / cross-origin */ }
+    try { f.contentWindow.postMessage({ type: 'setWs', addr: hostport, connect: !!connectNow }, '*'); } catch (e) { /* iframe not ready */ }
   }
 </script>
 </body>

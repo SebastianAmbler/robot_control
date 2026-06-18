@@ -57,7 +57,7 @@ function computeMotion() {
 
   const scale = GEARS[gear] / MAX_RPM;
   lin *= scale;
-  ang *= scale;
+  ang *= scale * 1.3;
 
   return { linear: lin, angular: ang };
 }
@@ -125,7 +125,6 @@ function sendMotionNow() {
 
 // Send immediately on any state change — bypasses buffer check
 let autoBraked = false;  // true when auto-brake has engaged (separate from manual isLocked)
-let brakeReleaseTimer = null;  // pending post-brake-release motion send; cancelled if input changes first
 
 function cycleGear() {
   gear = (gear + 1) % GEARS.length;
@@ -136,34 +135,21 @@ function cycleGear() {
 
 // Shared by keyboard and gamepad: call after `keys` changes.
 // Releases the auto-brake when movement starts, engages it when all input stops.
+// Mirrors the old rescue.py behaviour: release brake + move immediately on input,
+// stop + engage brake immediately when all input stops (no delayed send).
 function applyMoveChange() {
-  // Cancel any pending post-brake-release motion send: input changed again
-  // (e.g. a fast key tap) so a stale delayed send would fire with the wrong keys.
-  if (brakeReleaseTimer !== null) {
-    clearTimeout(brakeReleaseTimer);
-    brakeReleaseTimer = null;
-  }
-
   const anyKey = keys.w || keys.a || keys.s || keys.d;
   if (anyKey) {
     if (autoBrake && autoBraked && !isLocked) {
       autoBraked = false;
-      send({ cmd: "lock", state: 0 });   // release brake — sent on its own
-      // Delay the motion so the brake-release lands in a separate UDP burst.
-      // The Pi keeps only the last packet per burst, so an immediately-following
-      // motion packet would clobber the release and leave the motors locked.
-      // The delay also gives the ESP32 time to switch back to speed mode.
-      brakeReleaseTimer = setTimeout(() => {
-        brakeReleaseTimer = null;
-        sendMotionNow();
-      }, 80);
-    } else {
-      sendMotionNow();
+      send({ cmd: "lock", state: 0 });   // release brake
     }
+    sendMotionNow();
   } else {
     if (autoBrake && !isLocked) {
       autoBraked = true;
-      send({ cmd: "lock", state: 1 });
+      sendMotionNow();                    // stop the motors first
+      send({ cmd: "lock", state: 1 });    // then engage brake
       updateRPMDisplay(0, 0);
     } else {
       sendMotionNow();
@@ -209,11 +195,6 @@ document.addEventListener("keyup", e => {
 // Keepalive: self-throttles via bufferedAmount guard in sendMotionNow
 setInterval(() => {
   if (isLocked || autoBraked) return;
-  // Don't fire motion while a brake-release is pending — a keepalive packet sent
-  // right behind the lock:0 would land in the same UDP burst and the Pi would drop
-  // the release (keeps only the last packet), leaving the motors stuck braked.
-  // The scheduled send in applyMoveChange() will deliver the motion instead.
-  if (brakeReleaseTimer !== null) return;
   const anyKey = keys.w || keys.a || keys.s || keys.d;
   if (anyKey && Date.now() - lastSentMs >= KEEPALIVE_MS) sendMotionNow();
 }, 50);

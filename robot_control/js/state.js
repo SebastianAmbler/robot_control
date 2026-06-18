@@ -13,6 +13,15 @@ const THRESHOLDS = {
   tmp: { warn: 60,   crit: 75  },
 };
 
+// ─── Cameras ────────────────────────────────────────────────────────────────
+// One entry per CAM pane (CAM 1 / CAM 2). IP/host is configured in Parameters
+// and persisted to settings.json; the feed is the camera's own web page loaded
+// into a sandboxed <iframe> shrunk via CSS transform (zoom %).
+let CAMERAS = [
+  { proto: "http://", url: "", zoom: 50 },
+  { proto: "http://", url: "", zoom: 50 },
+];
+
 // ─── Sim ──────────────────────────────────────────────────────────────────────
 // Maps SERVOS index → sim servo key (matches IDX_TO_KEY in index.html)
 const SIM_KEYS = ['front','back','arm1','arm2','extend','arm4','arm5','gripper'];
@@ -45,6 +54,11 @@ const SIM_CAL = {
 
 // Track latest angles for the sim (indexed 0-7)
 let simAngles = SIM_KEYS.map(k => SIM_INIT[k].tgt);
+
+// IMU "flat" baseline (deg) subtracted from live roll/pitch so a level robot
+// shows level in the sim. Persisted in settings.json (imuZero); the sim reports
+// new values up when re-zeroed, and we push the stored value down to it.
+let IMU_ZERO = { roll: 0, pitch: 0 };
 
 // ─── State ────────────────────────────────────────────────────────────────────
 let ws        = null;

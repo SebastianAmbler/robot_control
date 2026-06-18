@@ -250,7 +250,7 @@ loader.load('./models/leg4.stl', geo => {
     addLeg(geo,  35, -20, 20, false, 'back', {});
     addLeg(geo, -35, -20, 20, true,  'back', {});
 });
-loader.load('../models/STLFORSIMJ.center.stl', geo => {
+loader.load('./models/STLForsimJ.center.stl', geo => {
     const g = geo.clone();
     g.computeBoundingBox();
     const b = g.boundingBox;
@@ -304,14 +304,59 @@ document.getElementById('btnConnect').onclick = () => {
     connectWS();
 };
 
+// IMU calibration: the robot's mounted IMU rarely reads exactly 0/0 when the
+// robot is physically level, so we subtract a captured "flat" baseline.
+// When embedded in control.html the baseline is supplied (and persisted to
+// settings.json) by the parent via setImuOffset(); re-zeroing here reports the
+// new value back up so it's saved. Standalone, the first sample is auto-zeroed.
+// Re-zero with window.zeroIMU(), by pressing 'c' over the sim, or via a
+// {type:'imuZero'} postMessage from the parent.
+let imuOffset  = null;                 // {roll, pitch} baseline captured when flat
+let imuLastRaw = { roll: 0, pitch: 0 };
+
+// Baseline pushed down from the parent page (authoritative / persisted).
+function setImuOffset(roll, pitch) {
+    roll = +roll; pitch = +pitch;
+    if (Number.isFinite(roll) && Number.isFinite(pitch)) imuOffset = { roll, pitch };
+}
+
+function zeroIMU() {
+    imuOffset = { roll: imuLastRaw.roll, pitch: imuLastRaw.pitch };
+    dbg(`IMU zeroed (roll ${imuOffset.roll.toFixed(1)}, pitch ${imuOffset.pitch.toFixed(1)})`, 'ok');
+    // Ask the parent (control.html) to persist this baseline to settings.json.
+    if (window.self !== window.top) {
+        try { window.parent.postMessage({ type: 'imuZeroChanged', offset: imuOffset }, '*'); } catch(_) {}
+    }
+}
+
+// Fixed "stand the model upright" orientation (the robotGroup's original
+// rotation.x = -PI/2). The IMU tilt is composed on top of this rather than
+// folded into it, so tilting can't swing the heading around.
+const IMU_BASE_QUAT = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
+const _imuTiltEuler = new THREE.Euler();
+const _imuTiltQuat  = new THREE.Quaternion();
+
 function applyIMU(roll, pitch, yaw) {
-    document.getElementById('vX').innerText = (+roll).toFixed(1);
-    document.getElementById('vY').innerText = (+pitch).toFixed(1);
-    document.getElementById('vZ').innerText = (+yaw).toFixed(1);
-    robotGroup.quaternion.setFromEuler(new THREE.Euler(
-        -Math.PI/2 + THREE.MathUtils.degToRad(roll),
-        THREE.MathUtils.degToRad(-pitch),
-        THREE.MathUtils.degToRad(yaw), 'XYZ'));
+    roll = +roll; pitch = +pitch;
+    imuLastRaw = { roll, pitch };
+    if (imuOffset === null) imuOffset = { roll, pitch };   // auto-zero on first sample
+    const r = roll  - imuOffset.roll;
+    const p = pitch - imuOffset.pitch;
+    document.getElementById('vX').innerText = r.toFixed(1);
+    document.getElementById('vY').innerText = p.toFixed(1);
+    if (yaw !== undefined) document.getElementById('vZ').innerText = (+yaw).toFixed(1);
+    // Tip in the WORLD frame about the two horizontal axes only — pitch about
+    // X (tip forward/back), roll about Z (tip left/right). Nothing rotates the
+    // vertical (world Y) axis, so the robot keeps the same heading; yaw is
+    // intentionally excluded. Applying tilt * base keeps the tilt in world space.
+    // (Flip the sign on a line below if a tilt direction comes out reversed.)
+    _imuTiltEuler.set(
+        THREE.MathUtils.degToRad(r),   // roll  → world X (tip left/right)
+        0,                             // no yaw (world Y / vertical)
+        THREE.MathUtils.degToRad(-p),   // pitch → world Z (tip forward/back)
+        'XYZ');
+    _imuTiltQuat.setFromEuler(_imuTiltEuler);
+    robotGroup.quaternion.multiplyQuaternions(_imuTiltQuat, IMU_BASE_QUAT);
 }
 
 const LERP = 0.12;
@@ -346,9 +391,18 @@ window.addEventListener('resize', () => {
 
 if (window.self !== window.top) document.getElementById('ui').classList.add('hidden');
 
+// Press 'c' over the sim to re-zero the IMU to the robot's current (flat) pose.
+window.addEventListener('keydown', e => { if (e.key === 'c' || e.key === 'C') zeroIMU(); });
+
 window.addEventListener('message', evt => {
     const msg = evt.data;
-    if (!msg || msg.type !== 'state' || !Array.isArray(msg.angles)) return;
+    if (!msg) return;
+    // IMU orientation forwarded from control.html — tilt the robot body.
+    if (msg.type === 'imu') { applyIMU(msg.roll, msg.pitch); return; }
+    if (msg.type === 'imuZero') { zeroIMU(); return; }
+    if (msg.type !== 'state' || !Array.isArray(msg.angles)) return;
+    // Persisted IMU baseline pushed down with each state update.
+    if (msg.imuZero) setImuOffset(msg.imuZero.roll, msg.imuZero.pitch);
     msg.angles.forEach((val, i) => { const key = IDX_TO_KEY[i]; if (key && servo[key] !== undefined) servo[key].tgt = val; });
     if (typeof msg.selected === 'number') activeKey = IDX_TO_KEY[msg.selected] ?? '';
     // Accept live CAL updates from parent

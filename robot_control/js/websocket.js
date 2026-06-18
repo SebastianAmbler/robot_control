@@ -87,6 +87,18 @@ function connectWS(silent) {
       // Avatar arm echo: update slider/label + 3D sim without re-sending to server.
       if (obj.cmd === "servo") { setServoAngle(obj.id, obj.angle, false); return; }
       if (obj.cmd === "avatar_status") { return; }
+      // IMU orientation from the Pi: light the status dot and forward roll/pitch
+      // to the 3D sim iframe so the robot body tilts with the real robot. Yaw is
+      // omitted on purpose — the heading is unreliable due to interference.
+      if (obj.cmd === "imu") {
+        const dot = document.getElementById("imu-dot");
+        if (dot) dot.classList.add("on");
+        const f = document.getElementById("sim-iframe");
+        if (f && f.contentWindow) {
+          try { f.contentWindow.postMessage({ type: "imu", roll: obj.roll, pitch: obj.pitch }, "*"); } catch(_) {}
+        }
+        return;
+      }
       if (obj.T === 3) { lastEsp32Msg = Date.now(); updateMotor(obj); }
       else if (obj.T === 21) { lastEsp32Msg = Date.now(); log("[ESP32] " + obj.info); }
     } catch(_) {}

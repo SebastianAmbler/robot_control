@@ -275,5 +275,21 @@
         "name": "Arm3 wrist"
       }
     ]
-  }
+  },
+  "imuZero": {
+    "roll": 0.43,
+    "pitch": 0.78
+  },
+  "cameras": [
+    {
+      "proto": "http://",
+      "url": "192.168.1.150",
+      "zoom": 65
+    },
+    {
+      "proto": "http://",
+      "url": "192.168.1.88",
+      "zoom": 50
+    }
+  ]
 }

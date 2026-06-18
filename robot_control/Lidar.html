@@ -344,6 +344,39 @@ function drawRobot(sx, sy, th) {
   ctx.restore();
 }
 
+// ─── parent (control.html) control via postMessage ────────────────────────────
+// Direct cross-frame calls (f.contentWindow.setMode) fail when the page is opened
+// cross-origin or via file:// (opaque origins), so the embedding UI drives us with
+// messages instead — same pattern the 3D sim iframe uses.
+// Call a std_srvs/Trigger service on the existing rosbridge connection and report
+// the result back to the parent UI (which drives the SLAM/Save Map buttons).
+function callTrigger(name, cmd) {
+  if (!ros) { window.parent.postMessage({type:'slamResult',cmd,success:false,message:'no rosbridge'}, '*'); return; }
+  const svc = new ROSLIB.Service({ ros, name, serviceType:'std_srvs/srv/Trigger' });
+  svc.callService(new ROSLIB.ServiceRequest({}),
+    res => window.parent.postMessage({type:'slamResult',cmd,success:res.success,message:res.message}, '*'),
+    err => window.parent.postMessage({type:'slamResult',cmd,success:false,message:String(err)}, '*'));
+}
+
+window.addEventListener('message', e => {
+  const d = e.data;
+  if (!d || typeof d !== 'object') return;
+  if (d.type === 'setMode' && (d.mode === 'scan' || d.mode === 'map')) {
+    setMode(d.mode);
+  } else if (d.type === 'setWs' && d.addr) {
+    const addr = document.getElementById('wsAddr');
+    if (addr.value === d.addr) return;   // already on this address — don't churn the connection
+    addr.value = d.addr;
+    if (d.connect) connect();
+  } else if (d.type === 'slamStart') {
+    callTrigger('/slam/start', 'start');
+  } else if (d.type === 'slamStop') {
+    callTrigger('/slam/stop', 'stop');
+  } else if (d.type === 'mapSave') {
+    callTrigger('/slam/save_map', 'save');
+  }
+});
+
 // ─── boot ─────────────────────────────────────────────────────────────────────
 if (location.hash.includes('embed') || location.search.includes('embed')) document.body.classList.add('embed');
 resize();

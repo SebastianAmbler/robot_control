@@ -17,6 +17,7 @@ import json
 import threading
 import os
 import mimetypes
+import webbrowser
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, unquote
 
@@ -89,7 +90,11 @@ DEFAULT_SETTINGS = {
     "avatar": {
         "deadband": AVATAR_DEADBAND,
         "calib": CALIB,
-    }
+    },
+    "cameras": [
+        {"proto": "http://", "url": "", "zoom": 50},
+        {"proto": "http://", "url": "", "zoom": 50},
+    ],
 }
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -492,7 +497,11 @@ async def main():
     # Start HTTP server in background thread
     http_thread = threading.Thread(target=run_http_server, daemon=True)
     http_thread.start()
-    
+
+    # Open the UI in the default browser once the HTTP server is up
+    ui_url = f"http://localhost:{HTTP_PORT}/control.html"
+    threading.Timer(1.0, lambda: webbrowser.open(ui_url)).start()
+
     # Start UDP feedback threads (ESP32 telemetry on 3391, servo ANGLES readback on 3392)
     t = threading.Thread(target=udp_feedback_thread, args=(loop,), daemon=True)
     t.start()
