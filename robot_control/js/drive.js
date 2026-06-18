@@ -57,7 +57,7 @@ function computeMotion() {
 
   const scale = GEARS[gear] / MAX_RPM;
   lin *= scale;
-  ang *= scale * 1.3;
+  ang *= scale * 1.4;
 
   return { linear: lin, angular: ang };
 }

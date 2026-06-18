@@ -1,0 +1,29 @@
+[3.059s] Invoking command in '/home/pi/ros2_ws/build/lidar_slam_bringup': AMENT_PREFIX_PATH=/home/pi/ros2_ws/install/rf2o_laser_odometry:/home/pi/ros2_ws/install/ldlidar_ros2:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/pi/ros2_ws/install/rf2o_laser_odometry:/home/pi/ros2_ws/install/ldlidar_ros2:${CMAKE_PREFIX_PATH} PYTHONPATH=/home/pi/ros2_ws/build/lidar_slam_bringup/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/pi/ros2_ws/install/lidar_slam_bringup/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/pi/ros2_ws/build/lidar_slam_bringup/build --no-deps symlink_data
+[4.112s] running develop
+[4.733s] running egg_info
+[4.733s] creating lidar_slam_bringup.egg-info
+[4.734s] writing lidar_slam_bringup.egg-info/PKG-INFO
+[4.736s] writing dependency_links to lidar_slam_bringup.egg-info/dependency_links.txt
+[4.736s] writing entry points to lidar_slam_bringup.egg-info/entry_points.txt
+[4.737s] writing requirements to lidar_slam_bringup.egg-info/requires.txt
+[4.737s] writing top-level names to lidar_slam_bringup.egg-info/top_level.txt
+[4.738s] writing manifest file 'lidar_slam_bringup.egg-info/SOURCES.txt'
+[4.744s] reading manifest file 'lidar_slam_bringup.egg-info/SOURCES.txt'
+[4.747s] writing manifest file 'lidar_slam_bringup.egg-info/SOURCES.txt'
+[4.753s] running build_ext
+[4.753s] Creating /home/pi/ros2_ws/install/lidar_slam_bringup/lib/python3.10/site-packages/lidar-slam-bringup.egg-link (link to .)
+[4.756s] Installing imu_node script to /home/pi/ros2_ws/install/lidar_slam_bringup/lib/lidar_slam_bringup
+[4.759s] 
+[4.760s] Installed /home/pi/ros2_ws/build/lidar_slam_bringup
+[4.761s] running symlink_data
+[4.763s] creating /home/pi/ros2_ws/install/lidar_slam_bringup/share/ament_index
+[4.764s] creating /home/pi/ros2_ws/install/lidar_slam_bringup/share/ament_index/resource_index
+[4.765s] creating /home/pi/ros2_ws/install/lidar_slam_bringup/share/ament_index/resource_index/packages
+[4.766s] symbolically linking /home/pi/ros2_ws/build/lidar_slam_bringup/resource/lidar_slam_bringup -> /home/pi/ros2_ws/install/lidar_slam_bringup/share/ament_index/resource_index/packages
+[4.767s] symbolically linking /home/pi/ros2_ws/build/lidar_slam_bringup/package.xml -> /home/pi/ros2_ws/install/lidar_slam_bringup/share/lidar_slam_bringup
+[4.768s] creating /home/pi/ros2_ws/install/lidar_slam_bringup/share/lidar_slam_bringup/launch
+[4.770s] symbolically linking /home/pi/ros2_ws/build/lidar_slam_bringup/launch/slam.launch.py -> /home/pi/ros2_ws/install/lidar_slam_bringup/share/lidar_slam_bringup/launch
+[4.771s] creating /home/pi/ros2_ws/install/lidar_slam_bringup/share/lidar_slam_bringup/config
+[4.772s] symbolically linking /home/pi/ros2_ws/build/lidar_slam_bringup/config/ekf.yaml -> /home/pi/ros2_ws/install/lidar_slam_bringup/share/lidar_slam_bringup/config
+[4.773s] symbolically linking /home/pi/ros2_ws/build/lidar_slam_bringup/config/slam_toolbox.yaml -> /home/pi/ros2_ws/install/lidar_slam_bringup/share/lidar_slam_bringup/config
+[4.892s] Invoked command in '/home/pi/ros2_ws/build/lidar_slam_bringup' returned '0': AMENT_PREFIX_PATH=/home/pi/ros2_ws/install/rf2o_laser_odometry:/home/pi/ros2_ws/install/ldlidar_ros2:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/pi/ros2_ws/install/rf2o_laser_odometry:/home/pi/ros2_ws/install/ldlidar_ros2:${CMAKE_PREFIX_PATH} PYTHONPATH=/home/pi/ros2_ws/build/lidar_slam_bringup/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/pi/ros2_ws/install/lidar_slam_bringup/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/pi/ros2_ws/build/lidar_slam_bringup/build --no-deps symlink_data

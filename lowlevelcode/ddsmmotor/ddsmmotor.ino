@@ -222,10 +222,15 @@ void serialCtrl() {
         char c = Serial.read();
         if (c == '\n') {
             if (rxBuffer.length() > 0) {
-                if (rxBuffer.indexOf("\"T\":2") >= 0) {
-                    handleJsonCmd(rxBuffer);
+                // Lock/release packets ({"T":2,"lock":..}) must execute immediately
+                // and must never be coalesced into latestMotion. Detect them by the
+                // "lock" key so the match is robust to JSON whitespace: the Pi bridge
+                // emits "T": 2 (space after the colon), so an exact "\"T\":2" match
+                // misses every lock packet and silently drops brake commands.
+                if (rxBuffer.indexOf("\"lock\"") >= 0) {
+                    handleJsonCmd(rxBuffer);   // lock / release — execute now
                 } else {
-                    latestMotion = rxBuffer;
+                    latestMotion = rxBuffer;   // motion — coalesce, keep only the latest
                 }
                 rxBuffer = "";
             }

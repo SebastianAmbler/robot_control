@@ -1,0 +1,25 @@
+[0.147s] Invoking command in '/home/pi/ros2_ws/build/rf2o_laser_odometry': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/pi/ros2_ws/install/lidar_slam_bringup:/opt/ros/humble /usr/bin/cmake --build /home/pi/ros2_ws/build/rf2o_laser_odometry -- -j4 -l4
+[1.042s] [ 60%] Built target rf2o_laser_odometry_node
+[1.054s] [100%] Built target rf2o_laser_odometry
+[1.170s] Invoked command in '/home/pi/ros2_ws/build/rf2o_laser_odometry' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/pi/ros2_ws/install/lidar_slam_bringup:/opt/ros/humble /usr/bin/cmake --build /home/pi/ros2_ws/build/rf2o_laser_odometry -- -j4 -l4
+[1.182s] Invoking command in '/home/pi/ros2_ws/build/rf2o_laser_odometry': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/pi/ros2_ws/install/lidar_slam_bringup:/opt/ros/humble /usr/bin/cmake --install /home/pi/ros2_ws/build/rf2o_laser_odometry
+[1.303s] -- Install configuration: ""
+[1.318s] -- Execute custom install script
+[1.323s] -- Up-to-date symlink: /home/pi/ros2_ws/install/rf2o_laser_odometry/lib/rf2o_laser_odometry/rf2o_laser_odometry_node
+[1.332s] -- Up-to-date symlink: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/rf2o_laser_odometry/launch/rf2o_laser_odometry.launch.py
+[1.337s] -- Up-to-date symlink: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/ament_index/resource_index/package_run_dependencies/rf2o_laser_odometry
+[1.363s] -- Up-to-date symlink: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/ament_index/resource_index/parent_prefix_path/rf2o_laser_odometry
+[1.366s] -- Up-to-date symlink: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/rf2o_laser_odometry/environment/ament_prefix_path.sh
+[1.367s] -- Up-to-date symlink: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/rf2o_laser_odometry/environment/ament_prefix_path.dsv
+[1.367s] -- Up-to-date symlink: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/rf2o_laser_odometry/environment/path.sh
+[1.368s] -- Up-to-date symlink: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/rf2o_laser_odometry/environment/path.dsv
+[1.369s] -- Up-to-date symlink: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/rf2o_laser_odometry/local_setup.bash
+[1.369s] -- Up-to-date symlink: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/rf2o_laser_odometry/local_setup.sh
+[1.370s] -- Up-to-date symlink: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/rf2o_laser_odometry/local_setup.zsh
+[1.371s] -- Up-to-date symlink: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/rf2o_laser_odometry/local_setup.dsv
+[1.372s] -- Symlinking: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/rf2o_laser_odometry/package.dsv
+[1.377s] -- Up-to-date symlink: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/ament_index/resource_index/packages/rf2o_laser_odometry
+[1.378s] -- Up-to-date symlink: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/rf2o_laser_odometry/cmake/rf2o_laser_odometryConfig.cmake
+[1.378s] -- Up-to-date symlink: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/rf2o_laser_odometry/cmake/rf2o_laser_odometryConfig-version.cmake
+[1.378s] -- Up-to-date symlink: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/rf2o_laser_odometry/package.xml
+[1.550s] Invoked command in '/home/pi/ros2_ws/build/rf2o_laser_odometry' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/home/pi/ros2_ws/install/lidar_slam_bringup:/opt/ros/humble /usr/bin/cmake --install /home/pi/ros2_ws/build/rf2o_laser_odometry

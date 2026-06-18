@@ -1,0 +1,26 @@
+[ 20%] Building CXX object CMakeFiles/rf2o_laser_odometry_node.dir/src/CLaserOdometry2DNode.cpp.o
+[ 40%] Building CXX object CMakeFiles/rf2o_laser_odometry_node.dir/src/CLaserOdometry2D.cpp.o
+[ 60%] Building CXX object CMakeFiles/rf2o_laser_odometry.dir/src/CLaserOdometry2D.cpp.o
+[ 80%] Linking CXX executable rf2o_laser_odometry_node
+[100%] Linking CXX static library librf2o_laser_odometry.a
+[100%] Built target rf2o_laser_odometry
+[100%] Built target rf2o_laser_odometry_node
+-- Install configuration: ""
+-- Execute custom install script
+-- Symlinking: /home/pi/ros2_ws/install/rf2o_laser_odometry/lib/rf2o_laser_odometry/rf2o_laser_odometry_node
+-- Symlinking: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/rf2o_laser_odometry/launch/rf2o_laser_odometry.launch.py
+-- Symlinking: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/ament_index/resource_index/package_run_dependencies/rf2o_laser_odometry
+-- Symlinking: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/ament_index/resource_index/parent_prefix_path/rf2o_laser_odometry
+-- Symlinking: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/rf2o_laser_odometry/environment/ament_prefix_path.sh
+-- Symlinking: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/rf2o_laser_odometry/environment/ament_prefix_path.dsv
+-- Symlinking: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/rf2o_laser_odometry/environment/path.sh
+-- Symlinking: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/rf2o_laser_odometry/environment/path.dsv
+-- Symlinking: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/rf2o_laser_odometry/local_setup.bash
+-- Symlinking: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/rf2o_laser_odometry/local_setup.sh
+-- Symlinking: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/rf2o_laser_odometry/local_setup.zsh
+-- Symlinking: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/rf2o_laser_odometry/local_setup.dsv
+-- Symlinking: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/rf2o_laser_odometry/package.dsv
+-- Symlinking: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/ament_index/resource_index/packages/rf2o_laser_odometry
+-- Symlinking: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/rf2o_laser_odometry/cmake/rf2o_laser_odometryConfig.cmake
+-- Symlinking: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/rf2o_laser_odometry/cmake/rf2o_laser_odometryConfig-version.cmake
+-- Symlinking: /home/pi/ros2_ws/install/rf2o_laser_odometry/share/rf2o_laser_odometry/package.xml
