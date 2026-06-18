@@ -72,7 +72,7 @@ function computeRPM(linear, angular) {
 }
 
 let lastSentMs = 0;
-const KEEPALIVE_MS = 100;  // send at least every 200ms while moving to beat the 500ms watchdog
+const KEEPALIVE_MS = 100;  // send at least every 100ms while moving to beat the 1s watchdog
 
 function updateRPMDisplay(left, right) {
   document.getElementById("rpm-l").textContent = left;
