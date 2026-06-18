@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>3D Robot Full Assembly - IMU Control</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+            font-family: sans-serif;
+        }
+
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            background: rgba(0, 20, 0, 0.85);
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid #0f0;
+            color: #0f0;
+            min-width: 270px;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #0f0;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+
+        .val-box {
+            background: #111;
+            padding: 10px;
+            margin-top: 10px;
+            font-family: monospace;
+            border: 1px solid #333;
+            margin-bottom: 10px;
+        }
+
+        .highlight {
+            color: #ffff00;
+            font-weight: bold;
+        }
+
+        .arm-highlight {
+            color: #00cfff;
+            font-weight: bold;
+        }
+
+        .divider {
+            border-top: 1px solid #0a4a0a;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="ui">
+        <h3 style="margin-top:0;">ROBOT FULL ASSEMBLY</h3>
+        <button id="btnConnect">CONNECT IMU SENSOR</button>
+
+        <div class="val-box">
+            ROLL (X): <span id="vX">0.0</span> | PITCH (Y): <span id="vY">0.0</span> | YAW (Z): <span id="vZ">0.0</span>
+        </div>
+
+        <div style="font-size: 13px;">
+            <b>LEG CONTROL:</b><br>
+            [Y] Select Front | [U] Select Back<br>
+            [+] Swing Forward | [-] Swing Backward<br>
+            <br>
+            ACTIVE LEG: <span id="selText" class="highlight">FRONT (Leg2)</span>
+        </div>
+
+        <div class="divider"></div>
+
+        <div style="font-size: 13px;">
+            <b>ARM CONTROL:</b><br>
+            [I] Arm1 | [O] Arm2 | [P] Arm3<br>
+            [+] Rotate + | [-] Rotate −<br>
+            <br>
+            ARM1 ANGLE: <span id="armAngleText" class="arm-highlight">0.0°</span><br>
+            ARM2 ANGLE: <span id="arm2AngleText" class="arm-highlight">0.0°</span><br>
+            ARM3 ANGLE: <span id="arm3AngleText" class="arm-highlight">0.0°</span><br>
+            <br>
+            ACTIVE PART: <span id="activeText" class="highlight">FRONT (Leg2)</span>
+        </div>
+    </div>
+
+    <script type="importmap">
+{
+    "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+}
+</script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- 1. SETUP SCENE ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x111111);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 5000);
+        camera.position.set(600, 600, 600);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        scene.add(new THREE.GridHelper(1000, 20, 0x444444, 0x222222));
+        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+        dirLight.position.set(200, 500, 200);
+        scene.add(dirLight);
+
+        // --- 2. ROBOT GROUPS ---
+        const robotGroup = new THREE.Group();
+        robotGroup.rotation.x = -Math.PI / 2;
+        scene.add(robotGroup);
+
+        const frontLegs = [];
+        const backLegs = [];
+
+        // selectedPart: 'front' | 'back' | 'arm1' | 'arm2' | 'arm3'
+        let selectedPart = 'front';
+        let moveDirection = 0;
+
+        let frontAngle = 0;
+        let backAngle = 0;
+
+        // --- ARM1 JOINT STATE ---
+        let arm1Joint = null;
+        let arm1Angle = 0;
+        const ARM1_MIN = -Math.PI;
+        const ARM1_MAX =  Math.PI;
+
+        // --- ARM2 JOINT STATE ---
+        let arm2Joint = null;
+        let arm2Angle = 0;
+        const ARM2_MIN = -Math.PI;
+        const ARM2_MAX =  Math.PI;
+
+        // --- ARM3 JOINT STATE ---
+        let arm3Joint = null;
+        let arm3Angle = 0;
+        const ARM3_MIN = -Math.PI;
+        const ARM3_MAX =  Math.PI;
+
+        const loader = new STLLoader();
+
+        // ─────────────────────────────────────────────────────────
+        // addLeg
+        // ─────────────────────────────────────────────────────────
+        function addLeg(geometry, posX, posY, posZ, isMirror, type, preRotations = {}) {
+            const geo = geometry.clone();
+            geo.computeBoundingBox();
+            const box = geo.boundingBox;
+            const cx = (box.max.x + box.min.x) / 2;
+            const cz = (box.max.z + box.min.z) / 2;
+            const ty = -box.max.y;
+            geo.translate(-cx, ty, -cz);
+
+            const material = new THREE.MeshPhongMaterial({ color: 0xFF5C00, shininess: 80 });
+            const mesh = new THREE.Mesh(geo, material);
+
+            if (isMirror) mesh.scale.x = -1;
+            if (preRotations.x !== undefined) mesh.rotation.x = preRotations.x;
+            if (preRotations.y !== undefined) mesh.rotation.y = preRotations.y;
+            if (preRotations.z !== undefined) mesh.rotation.z = preRotations.z;
+
+            const joint = new THREE.Group();
+            joint.position.set(posX, posY, posZ);
+            joint.add(mesh);
+            joint.add(new THREE.AxesHelper(30));
+
+            robotGroup.add(joint);
+            if (type === 'front') frontLegs.push(joint);
+            else backLegs.push(joint);
+        }
+
+        // ─────────────────────────────────────────────────────────
+        // createArm1Joint — root ของ arm chain
+        // ─────────────────────────────────────────────────────────
+        function createArm1Joint(geometry) {
+            const geo = geometry.clone();
+            geo.computeBoundingBox();
+            const box = geo.boundingBox;
+
+            const px = box.min.x + 20;
+            const py = box.min.y + 10;
+            const pz = (box.max.z + box.min.z) / 10;
+            geo.translate(-px, -py, -pz);
+
+            const material = new THREE.MeshPhongMaterial({ color: 0xFF5C00, shininess: 80 });
+            const mesh = new THREE.Mesh(geo, material);
+
+            const joint = new THREE.Group();
+            joint.position.set(-45 + px, -80 + py, 20 + pz);
+            joint.add(mesh);
+            joint.add(new THREE.AxesHelper(40));
+
+            robotGroup.add(joint);
+            arm1Joint = joint;
+        }
+
+        // ─────────────────────────────────────────────────────────
+        // createArm2Joint — child ของ arm1Joint
+        // ─────────────────────────────────────────────────────────
+        function createArm2Joint(geometry) {
+            const geo = geometry.clone();
+            geo.computeBoundingBox();
+            const box = geo.boundingBox;
+
+            const px = box.min.x;
+            const py = box.min.y;
+            const pz = (box.max.z + box.min.z) / 2;
+            geo.translate(-px, -py, -pz);
+
+            const material = new THREE.MeshPhongMaterial({ color: 0xFF5C00, shininess: 80 });
+            const mesh = new THREE.Mesh(geo, material);
+
+            const joint = new THREE.Group();
+            joint.add(mesh);
+            joint.add(new THREE.AxesHelper(40));
+
+            const tryAttach = () => {
+                if (arm1Joint) {
+                    const a1p = arm1Joint.position;
+                    joint.position.set(
+                        -45 - a1p.x + px,
+                        -80 - a1p.y + py,
+                         20 - a1p.z + pz
+                    );
+                    arm1Joint.add(joint);
+                    arm2Joint = joint;
+                } else {
+                    setTimeout(tryAttach, 50);
+                }
+            };
+            tryAttach();
+        }
+
+        // ─────────────────────────────────────────────────────────
+        // createArm3Joint — child ของ arm2Joint
+        // ─────────────────────────────────────────────────────────
+        function createArm3Joint(geometry) {
+            const geo = geometry.clone();
+            geo.computeBoundingBox();
+            const box = geo.boundingBox;
+
+            const px = box.min.x;
+            const py = box.min.y;
+            const pz = (box.max.z + box.min.z) / 2;
+            geo.translate(-px, -py, -pz);
+
+            const material = new THREE.MeshPhongMaterial({ color: 0xFF5C00, shininess: 80 });
+            const mesh = new THREE.Mesh(geo, material);
+
+            const joint = new THREE.Group();
+            joint.add(mesh);
+            joint.add(new THREE.AxesHelper(40));
+
+            const tryAttach = () => {
+                if (arm2Joint && arm1Joint) {
+                    const a1p = arm1Joint.position;
+                    const a2p = arm2Joint.position; // local ใน arm1Joint
+                    joint.position.set(
+                        -45 - a1p.x - a2p.x + px,
+                        -80 - a1p.y - a2p.y + py,
+                         20 - a1p.z - a2p.z + pz
+                    );
+                    arm2Joint.add(joint);
+                    arm3Joint = joint;
+                } else {
+                    setTimeout(tryAttach, 50);
+                }
+            };
+            tryAttach();
+        }
+
+        // ─────────────────────────────────────────────────────────
+        // addChildToArm3 — Gripper1, Gripper2 เป็น child ของ arm3Joint
+        // ────────────────────────────────────────────
