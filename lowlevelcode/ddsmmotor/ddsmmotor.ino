@@ -148,10 +148,10 @@ void lockMotors() {
   isLocked = true;
   motorSpeedLeft = motorSpeedRight = 0;
   for (int i = 0; i < 3; i++) {
-    send_brake(1); delay(4);
-    send_brake(2); delay(4);
-    send_brake(3); delay(4);
-    send_brake(4); delay(4);
+    send_brake(1);
+    send_brake(2);
+    send_brake(3);
+    send_brake(4);
   }
   sendInfo("locked");
 }
@@ -213,26 +213,30 @@ void handleJsonCmd(const String& json) {
 }
 
 void serialCtrl() {
-    // Drain the buffer keeping only the last complete command
-    // This prevents stale motion commands queuing ahead of a stop
-    static String latest = "";
-    
+    // Drain the buffer, executing lock commands (T:2) immediately so they are
+    // never dropped.  Motion commands (T:1) are coalesced — only the latest
+    // one is executed — to prevent stale speed packets queuing ahead of a stop.
+    static String latestMotion = "";
+
     while (Serial.available()) {
         char c = Serial.read();
         if (c == '\n') {
             if (rxBuffer.length() > 0) {
-                latest = rxBuffer;
+                if (rxBuffer.indexOf("\"T\":2") >= 0) {
+                    handleJsonCmd(rxBuffer);
+                } else {
+                    latestMotion = rxBuffer;
+                }
                 rxBuffer = "";
             }
         } else {
             rxBuffer += c;
         }
     }
-    
-    // Only execute the most recent complete command
-    if (latest.length() > 0) {
-        handleJsonCmd(latest);
-        latest = "";
+
+    if (latestMotion.length() > 0) {
+        handleJsonCmd(latestMotion);
+        latestMotion = "";
     }
 }
 
