@@ -60,6 +60,8 @@ function connectWS(silent) {
     setStatus(true);
     document.getElementById("ws-connect").textContent = "Disconnect";
     log("Connected", "info");
+    // Re-arm the server-side avatar bridge if the toggle was left on.
+    if (avatarOn) send({ cmd: "avatar", state: 1 });
   };
   ws.onclose = () => {
     setStatus(false);
@@ -73,20 +75,39 @@ function connectWS(silent) {
   };
   ws.onmessage = (e) => {
     try {
-      // Plain-text feedback from UDPS: "ANGLES:90,90,..." or "DATA:..."
-      if (typeof e.data === "string" && e.data.startsWith("ANGLES:")) {
-        lastTeensyMsg = Date.now();
-        applyAngles(e.data.slice(7).trim());
-        return;
-      }
+      // Plain-text feedback from UDPS: "DATA:..."
       if (typeof e.data === "string" && e.data.startsWith("DATA:")) {
         lastTeensyMsg = Date.now();
         return;
       }
+      // JSON.parse is inside this try{}: malformed/partial serial lines throw
+      // and are swallowed by the catch below, so the connection never crashes.
       const obj = JSON.parse(e.data);
+      // Teensy feedback now arrives as typed JSON. Three shapes:
+      //   {"type":"angles","front":90,...,"grip":90}   — joint readback (10 Hz)
+      //   {"type":"compass","x":..,"y":..,"z":..,"heading":..}  — magnetometer (5 Hz)
+      //   {"type":"thermal","data":[64 floats]}        — AMG8833 8x8 grid (10 Hz)
+      // Any typed Teensy message proves the board is alive; route by type.
+      if (obj.type) {
+        lastTeensyMsg = Date.now();
+        if (obj.type === "thermal")      applyThermal(obj);
+        else if (obj.type === "compass") applyCompass(obj);
+        else                             applyAngles(obj);
+        return;
+      }
       // Avatar arm echo: update slider/label + 3D sim without re-sending to server.
       if (obj.cmd === "servo") { setServoAngle(obj.id, obj.angle, false); return; }
       if (obj.cmd === "avatar_status") { return; }
+      // QR logging (BTN 1): status drives the button's lit state; detect logs a code.
+      if (obj.cmd === "qr_status") { applyQrStatus(obj); return; }
+      if (obj.cmd === "qr_detect") { applyQrDetect(obj); return; }
+      if (obj.cmd === "qr_overlay") { drawQrOverlay(obj); return; }
+      // AI detection (BTN 2): status drives the button; overlay draws boxes.
+      if (obj.cmd === "ai_status") { applyAiStatus(obj); return; }
+      if (obj.cmd === "ai_overlay") { drawAiOverlay(obj); return; }
+      // Motion detection (BTN 3): status drives the button; overlay draws boxes.
+      if (obj.cmd === "motion_status") { applyMotionStatus(obj); return; }
+      if (obj.cmd === "motion_overlay") { drawMotionOverlay(obj); return; }
       // IMU orientation from the Pi: light the status dot and forward roll/pitch
       // to the 3D sim iframe so the robot body tilts with the real robot. Yaw is
       // omitted on purpose — the heading is unreliable due to interference.
@@ -126,7 +147,11 @@ function updateBoardStatus() {
   };
   setDot("ws-dot",     open);
   setDot("esp32-dot",  open && (now - lastEsp32Msg)  < BOARD_TIMEOUT);
-  setDot("teensy-dot", open && (now - lastTeensyMsg) < BOARD_TIMEOUT);
+  const teensyAlive = open && (now - lastTeensyMsg) < BOARD_TIMEOUT;
+  setDot("teensy-dot", teensyAlive);
+  // Magnet detection comes from the Teensy's compass; blank it when stale so a
+  // stale "NORTH"/"SOUTH" never lingers after the board goes quiet.
+  if (!teensyAlive && typeof setMagnetDisplay === "function") setMagnetDisplay(null);
 }
 setInterval(updateBoardStatus, 500);
 

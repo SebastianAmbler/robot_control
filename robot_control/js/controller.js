@@ -1,7 +1,7 @@
 // ─── Gamepad / controller input ───────────────────────────────────────────────
 // Polls a connected gamepad and maps it onto the existing pipelines: D-pad →
-// `keys` (drive), triggers/bumpers → flipper servos, R3 → gear, face buttons →
-// postures. Active only while controlMode === "controller".
+// `keys` (drive), triggers/bumpers → flipper servos, R3 → gear, L3 → avatar
+// toggle, face buttons → postures. Active only while controlMode === "controller".
 
 function updateGamepadStatusUI() {
   const dot  = document.getElementById("gp-dot");
@@ -99,6 +99,7 @@ function pollGamepad() {
     return down && !was;
   };
   if (edge("r3")) cycleGear();
+  if (edge("l3")) toggleAvatar();  // left stick press → toggle avatar teleop arm
   Object.keys(CONTROLLER.posturesByButton).forEach(btn => {
     if (edge(btn)) applyPosture(CONTROLLER.posturesByButton[btn]);
   });

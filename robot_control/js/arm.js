@@ -314,13 +314,20 @@ function nudgeActiveServo(delta) {
   return true;
 }
 
-// ─── Update sliders from ANGLES: feedback ─────────────────────────────────────
-// Format: ANGLES:90,90,90,25,20,85,122,90
-function applyAngles(csv) {
-  const parts = csv.split(",");
+// ─── Update sliders from typed Teensy JSON feedback ──────────────────────────
+// Format: {"type":"angles","front":90,"back":90,"arm1":90,"arm2":25,
+//          "arm3":20,"arm4":85,"arm5":122,"grip":90}
+// Joint order matches SERVOS / IDX_TO_KEY (front, back, arm1..arm5, grip).
+const ANGLE_KEYS = ["front", "back", "arm1", "arm2", "arm3", "arm4", "arm5", "grip"];
+function applyAngles(data) {
+  if (!data || data.type !== "angles") {
+    // Future-proofing: ignore (and log) any other Teensy message types.
+    if (data && data.type) log("[Teensy] ignoring message type: " + data.type);
+    return;
+  }
   const angles = [];
   SERVOS.forEach((s, i) => {
-    const v = parseInt(parts[i]);
+    const v = parseInt(data[ANGLE_KEYS[i]]);
     if (isNaN(v)) { angles.push(simAngles[i] ?? 90); return; }
     angles.push(v);
     const slider = document.getElementById("sv-slider-" + s.id);

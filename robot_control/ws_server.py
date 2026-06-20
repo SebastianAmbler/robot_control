@@ -6,6 +6,11 @@ This script translates WebSocket messages into UDP packets
 sent to the Raspberry Pi (esp32_bridge.py).
 
 Install:  pip install websockets
+          pip install pyserial            (avatar mode)
+          pip install opencv-python pyzbar  (QR logging; pyzbar = zbar decoder)
+          pip install onnxruntime-gpu nvidia-cudnn-cu12 nvidia-cublas-cu12 \
+              nvidia-cuda-runtime-cu12 nvidia-cufft-cu12 nvidia-curand-cu12
+                                            (AI detection on GPU; CUDA-12 build)
 Run:      python ws_server.py
 """
 
@@ -16,8 +21,10 @@ import struct
 import json
 import threading
 import os
+import time
 import mimetypes
 import webbrowser
+import urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, unquote
 
@@ -26,6 +33,47 @@ try:
     import serial.tools.list_ports
 except ImportError:
     serial = None   # Avatar mode unavailable until `pip install pyserial`
+
+try:
+    import cv2          # QR logging unavailable until `pip install opencv-python`
+    import numpy as np
+except ImportError:
+    cv2 = None
+    np = None
+try:
+    # QR decoding uses pyzbar (zbar): `pip install pyzbar`
+    from pyzbar.pyzbar import decode as _zbar_decode
+    from pyzbar.pyzbar import ZBarSymbol
+except Exception:
+    _zbar_decode = None
+    ZBarSymbol = None
+
+import ast
+
+
+def _add_cuda_dll_dirs():
+    """Put the nvidia-*-cu12 pip wheels' bin folders on the DLL search path so
+    onnxruntime's CUDA EP (and cuDNN's lazily-loaded sub-DLLs) can be found.
+    No-op if the nvidia wheels aren't installed."""
+    try:
+        import nvidia, glob
+        base = os.path.dirname(nvidia.__file__)
+        for d in glob.glob(os.path.join(base, "*", "bin")):
+            try:
+                os.add_dll_directory(d)
+            except Exception:
+                pass
+            os.environ["PATH"] = d + os.pathsep + os.environ.get("PATH", "")
+    except Exception:
+        pass
+
+
+try:
+    # AI detection (BTN 2) runs the X7 ONNX model on the GPU via onnxruntime-gpu.
+    _add_cuda_dll_dirs()      # must run before onnxruntime loads its CUDA provider
+    import onnxruntime as ort
+except Exception:
+    ort = None
 
 # ─── Config ───────────────────────────────────────────────────────────────────
 PI_IP         = "192.168.1.167"   # <-- SET THIS to your Pi's IP address
@@ -42,18 +90,18 @@ HTTP_PORT     = 8766              # HTTP server for settings file I/O
 # A physical "avatar" arm (a Teensy exposing 3 potentiometers over USB serial)
 # drives servos 3/4/5 (Shoulder/Elbow/Extend). See testcode2/avatar.py for the
 # original standalone bridge — this is the same logic embedded in the server.
-AVATAR_PORT  = "COM3"     # fallback if auto-detect fails
+AVATAR_PORT  = "COM16"     # fallback if auto-detect fails
 AVATAR_BAUD  = 115200
 SERVO_MARKER = 0xAA
 
-SERVO_MIN = [0,   30,  40,  30,  20,  70,  80,  35]
-SERVO_MAX = [180, 150, 165, 180, 180, 150, 180, 140]
+SERVO_MIN = [0,   30,  50,  25,  0,  0,  0,  0]
+SERVO_MAX = [180, 150, 130, 140, 155, 110, 180, 180]
 
 # 3 channels mapped to servo ids 3, 4, 5
 CALIB = [
     dict(pot=0, sid=3, rev=False, in0=0,   in1=180, out0=40, out1=165, name='Arm1 shoulder'),
     dict(pot=1, sid=4, rev=True,  in0=122, in1=180, out0=30, out1=150, name='Arm2 elbow'),
-    dict(pot=2, sid=5, rev=False, in0=0,   in1=180, out0=20, out1=180, name='Arm3 wrist'),
+    dict(pot=2, sid=6, rev=False, in0=44,   in1=133, out0=0, out1=110, name='Wrist J6'),
 ]
 AVATAR_DEADBAND = 2
 AVATAR_NUM_POTS = len(CALIB)
@@ -62,6 +110,47 @@ TEENSY_PINS     = [3, 4, 5]
 # Settings file location - use absolute path relative to this script
 SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
 SETTINGS_FILE = os.path.join(SCRIPT_DIR, "settings.json")
+
+# ─── QR code logging config (BTN 1 on the webcam toolbar) ──────────────────────
+# Decodes QR codes off the Pi's MJPEG feed and logs each unique code to a
+# timestamped CSV in savedCSV/. Header/filename fields below match the RoboCup
+# POI spec. Must match WEBCAM_STREAM_URL in robot_control/js/main.js.
+QR_STREAM_URL = f"http://{PI_IP}:8000/stream.mjpg"
+SAVED_CSV_DIR = os.path.join(SCRIPT_DIR, "savedCSV")
+QR_EVENT      = "RoboCup2026"
+QR_TEAM       = "Born2Shine"
+QR_CHALLENGE  = "Labyrinth"
+QR_COUNTRY    = "Thailand"
+# Cooldown (seconds) before the same QR value is logged again. The same code
+# seen within this window is ignored so a code held in frame isn't written every
+# frame; re-reading it after the buffer elapses logs a fresh row.
+QR_REPEAT_SEC = 5
+
+# On each logged QR, also tell the Pi's SLAM to drop a marker at the robot's
+# current map pose (see Pi qr_marker_node). Marker byte 0xCC + JSON, mirroring
+# the 0xAA servo / 0xFF lock framing, on its own UDP port. The throttle below is
+# a global minimum spacing between markers so a burst of codes doesn't stack.
+UDP_MARKER_PORT   = 3393      # Pi qr_marker_node listens here (0xCC + JSON)
+QR_MARKER_MARKER  = 0xCC
+QR_MARKER_MIN_SEC = 3         # min seconds between markers sent to SLAM
+
+# ─── AI detection config (BTN 2 on the webcam toolbar) ─────────────────────────
+# Runs the X7 ONNX model (Ultralytics YOLO11s, HazMat placards) on the same Pi
+# MJPEG feed, on the GPU via onnxruntime-gpu, and streams bounding boxes to the
+# UI. See _add_cuda_dll_dirs() above for the CUDA DLL setup.
+AI_STREAM_URL = QR_STREAM_URL
+AI_MODEL_PATH = os.path.join(SCRIPT_DIR, "X7.onnx")
+AI_IMGSZ      = 640      # model input size (square); from the model's imgsz metadata
+AI_CONF       = 0.35     # min confidence to keep a detection
+AI_IOU        = 0.45     # NMS IoU threshold
+
+# ─── Motion detection config (BTN 3 on the webcam toolbar) ─────────────────────
+# Frame-differences the same Pi MJPEG feed (OpenCV only, no model) and streams a
+# box around each moving region to the UI. No GPU/model needed.
+MOTION_STREAM_URL = QR_STREAM_URL
+MOTION_MIN_AREA   = 400    # ignore moving blobs smaller than this many px² (noise)
+MOTION_THRESH     = 70     # per-pixel diff threshold (0-255) to count as "changed"
+MOTION_BLUR       = 21     # gaussian blur kernel (odd) to damp sensor noise
 
 # Default parameters
 DEFAULT_SETTINGS = {
@@ -95,6 +184,9 @@ DEFAULT_SETTINGS = {
         {"proto": "http://", "url": "", "zoom": 50},
         {"proto": "http://", "url": "", "zoom": 50},
     ],
+    "webcamRotation": 0,
+    "thermal": {"min": 25, "max": 35, "flipH": False, "flipV": False},
+    "compass": {"axis": "z", "threshold": 500},
 }
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -250,7 +342,10 @@ def udp_feedback_thread(loop, sock=None):
         sock = udp_sock
     while True:
         try:
-            data, _ = sock.recvfrom(256)
+            # 4096: a thermal frame ({"type":"thermal","data":[64 floats]}) is
+            # ~400 bytes — well over the old 256 cap, which truncated it into
+            # invalid JSON. Keep this comfortably above the largest broadcast.
+            data, _ = sock.recvfrom(4096)
             msg = data.decode("utf-8", errors="ignore").strip()
             if msg and connected_clients:
                 asyncio.run_coroutine_threadsafe(
@@ -438,6 +533,552 @@ class AvatarBridge:
 avatar_bridge = AvatarBridge()
 
 
+# ─── QR code logging (ported intent: decode Pi camera, write POI CSV) ──────────
+def qr_status(text, running, count=None):
+    """Broadcast QR logging status to WS clients so BTN 1 can reflect state."""
+    if event_loop is not None and connected_clients:
+        msg = {"cmd": "qr_status", "running": bool(running), "text": text}
+        if count is not None:
+            msg["count"] = count
+        asyncio.run_coroutine_threadsafe(broadcast(json.dumps(msg)), event_loop)
+
+
+def _csv_field(value):
+    """Quote a data field per the POI spec: wrap in double quotes when it
+    contains a space (also comma/quote/newline so the CSV stays valid), and
+    double any embedded quotes."""
+    s = str(value)
+    if any(ch in s for ch in (' ', ',', '"', '\n', '\r')):
+        return '"' + s.replace('"', '""') + '"'
+    return s
+
+
+def _rect_poly(rect):
+    """Fallback 4-corner polygon from a pyzbar Rect (left, top, width, height)."""
+    l, t, w, h = rect.left, rect.top, rect.width, rect.height
+    return [[l, t], [l + w, t], [l + w, t + h], [l, t + h]]
+
+
+def open_mjpeg_latest(url, stop_event, tag, timeout=5):
+    """Open an MJPEG stream and start a daemon grabber that keeps only the most
+    recent complete JPEG in latest['jpg'] (older frames are dropped, so decoders
+    never fall behind real time). Returns (stream, latest, lock, thread); stream
+    is None on failure."""
+    try:
+        stream = urllib.request.urlopen(url, timeout=timeout)
+    except Exception as e:
+        print(f"[{tag}] Could not open stream {url}: {e}")
+        return None, None, None, None
+
+    latest = {"jpg": None}
+    lock = threading.Lock()
+
+    def _grab():
+        buf = b""
+        try:
+            while not stop_event.is_set():
+                chunk = stream.read(8192)
+                if not chunk:
+                    break
+                buf += chunk
+                # Pull every complete JPEG (SOI 0xFFD8 … EOI 0xFFD9) out of the
+                # buffer, keeping only the last — older frames are dropped.
+                while True:
+                    soi = buf.find(b"\xff\xd8")
+                    eoi = buf.find(b"\xff\xd9", soi + 2)
+                    if soi != -1 and eoi != -1:
+                        with lock:
+                            latest["jpg"] = buf[soi:eoi + 2]
+                        buf = buf[eoi + 2:]
+                    else:
+                        break
+                if len(buf) > 4_000_000:   # guard against unbounded growth
+                    buf = buf[-1_000_000:]
+        except Exception as e:
+            if not stop_event.is_set():
+                print(f"[{tag}] Stream read error: {e}")
+
+    thread = threading.Thread(target=_grab, daemon=True)
+    thread.start()
+    return stream, latest, lock, thread
+
+
+class QrBridge:
+    """Decodes QR codes from the Pi camera MJPEG stream and appends each unique
+    code to a timestamped CSV in savedCSV/. Toggled by BTN 1 (cmd:"qr").
+
+    Filename: RoboCup2026-Born2Shine-Labyrinth-HH-MM-SS-pois.csv
+    Header:   "Born2Shine" / "Thailand" / start date / start time, then the
+              column row `detection,detectedtime,qrcode detected data`.
+    """
+
+    def __init__(self):
+        self._thread = None
+        self._stop = threading.Event()
+
+    @property
+    def running(self):
+        return self._thread is not None and self._thread.is_alive()
+
+    def start(self):
+        if self.running:
+            return
+        if cv2 is None:
+            print("[QR] OpenCV not installed — run `pip install opencv-python`")
+            qr_status("QR unavailable — pip install opencv-python", False)
+            return
+        if _zbar_decode is None:
+            print("[QR] pyzbar not installed — run `pip install pyzbar`")
+            qr_status("QR unavailable — pip install pyzbar", False)
+            return
+        self._stop.clear()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        self._stop.set()
+        # Thread is daemon and releases the capture/file on exit; no join needed.
+        self._thread = None
+
+    def _decode(self, frame):
+        """Return [{'data': str, 'poly': [[x,y],...]}] for QR codes in a frame,
+        using pyzbar (zbar).
+
+        poly is the code's 4 corners in source-frame pixels, used by the UI to
+        draw a bounding box over the live stream.
+        """
+        results = []
+        for sym in _zbar_decode(frame, symbols=[ZBarSymbol.QRCODE]):
+            try:
+                data = sym.data.decode("utf-8", errors="replace")
+            except Exception:
+                continue
+            if not data:
+                continue
+            poly = [[int(p.x), int(p.y)] for p in sym.polygon] or _rect_poly(sym.rect)
+            results.append({"data": data, "poly": poly})
+        return results
+
+    def _broadcast_detect(self, n, detected, data):
+        if event_loop is not None and connected_clients:
+            asyncio.run_coroutine_threadsafe(
+                broadcast(json.dumps({
+                    "cmd": "qr_detect", "n": n, "time": detected, "data": data
+                })), event_loop)
+
+    def _send_marker(self, n, detected, data):
+        """Tell the Pi's SLAM to drop a map marker at the robot's current pose.
+        `n` matches the CSV `detection` column; `data` is the decoded QR string.
+        Best-effort UDP — a send failure must not kill the decode loop."""
+        try:
+            payload = json.dumps({
+                "cmd": "qr_marker", "n": n, "id": data, "time": detected
+            }).encode()
+            udp_sock.sendto(bytes([QR_MARKER_MARKER]) + payload,
+                            (PI_IP, UDP_MARKER_PORT))
+        except Exception as e:
+            print(f"[QR] marker send failed: {e}")
+
+    def _send_overlay(self, w, h, detections):
+        """Push every currently-visible code's polygon to the UI so it can draw
+        bounding boxes over the stream. Sent each decode cycle (not deduped) so
+        boxes track the codes live; an empty list clears the overlay."""
+        if event_loop is None or not connected_clients:
+            return
+        codes = [{"data": d["data"], "poly": d["poly"]} for d in detections]
+        asyncio.run_coroutine_threadsafe(
+            broadcast(json.dumps({"cmd": "qr_overlay", "w": w, "h": h, "codes": codes})),
+            event_loop)
+
+    def _run(self):
+        start = time.localtime()
+        fname = "%s-%s-%s-%s-pois.csv" % (
+            QR_EVENT, QR_TEAM, QR_CHALLENGE, time.strftime("%H-%M-%S", start))
+        path = os.path.join(SAVED_CSV_DIR, fname)
+
+        try:
+            os.makedirs(SAVED_CSV_DIR, exist_ok=True)
+            f = open(path, "w", newline="", encoding="utf-8")
+        except Exception as e:
+            print(f"[QR] Could not create {path}: {e}")
+            qr_status(f"QR file error: {e}", False)
+            return
+
+        # POI header: four quoted fields, then the column row (written verbatim).
+        f.write('"%s"\n' % QR_TEAM)
+        f.write('"%s"\n' % QR_COUNTRY)
+        f.write('"%s"\n' % time.strftime("%d/%m/%Y", start))
+        f.write('"%s"\n' % time.strftime("%H:%M:%S", start))
+        f.write("detection,detectedtime,qrcode detected data\n")
+        f.flush()
+
+        # Read the MJPEG socket directly and decode only the newest frame so QR
+        # detection stays on the live image (see open_mjpeg_latest).
+        stream, latest, latest_lock, grabber = open_mjpeg_latest(QR_STREAM_URL, self._stop, "QR")
+        if stream is None:
+            qr_status("QR: cannot open camera stream", False)
+            f.close()
+            return
+
+        last_logged = {}   # qr value -> monotonic time it was last written
+        count = 0
+        last_marker = 0.0  # monotonic time a marker was last sent to SLAM
+        had_overlay = False
+        print(f"[QR] Logging to {path}")
+        qr_status(f"QR logging → {fname}", True, 0)
+        try:
+            while not self._stop.is_set():
+                # Decode at ~7 Hz, always on the newest grabbed JPEG.
+                time.sleep(0.14)
+                with latest_lock:
+                    jpg = latest["jpg"]
+                    latest["jpg"] = None   # consume so we never re-decode a stale frame
+                if jpg is None:
+                    continue
+                frame = cv2.imdecode(np.frombuffer(jpg, np.uint8), cv2.IMREAD_COLOR)
+                if frame is None:
+                    continue
+
+                detections = self._decode(frame)
+                # Live bounding-box overlay for every visible code (send one
+                # empty frame on the falling edge to clear the UI overlay).
+                if detections:
+                    self._send_overlay(frame.shape[1], frame.shape[0], detections)
+                    had_overlay = True
+                elif had_overlay:
+                    self._send_overlay(frame.shape[1], frame.shape[0], [])
+                    had_overlay = False
+
+                # CSV logging: log each code, but not more than once per
+                # QR_REPEAT_SEC so a code held in frame isn't written every frame.
+                now = time.monotonic()
+                for item in detections:
+                    data = item["data"]
+                    prev = last_logged.get(data)
+                    if prev is not None and now - prev < QR_REPEAT_SEC:
+                        continue
+                    last_logged[data] = now
+                    count += 1
+                    detected = time.strftime("%H:%M:%S")
+                    f.write("%d,%s,%s\n" % (count, detected, _csv_field(data)))
+                    f.flush()
+                    print(f"[QR] #{count} {detected} {data!r}")
+                    self._broadcast_detect(count, detected, data)
+                    # Drop a marker on the SLAM map, but no faster than
+                    # QR_MARKER_MIN_SEC so a burst of codes doesn't stack.
+                    if now - last_marker >= QR_MARKER_MIN_SEC:
+                        self._send_marker(count, detected, data)
+                        last_marker = now
+                    qr_status(f"QR logging → {fname}", True, count)
+        finally:
+            # Close the socket first so a blocked stream.read() unblocks, then
+            # let the grabber notice the stop flag and exit.
+            try:
+                stream.close()
+            except Exception:
+                pass
+            grabber.join(timeout=1.0)
+            try:
+                f.close()
+            except Exception:
+                pass
+            print(f"[QR] Stopped ({count} codes) → {path}")
+            qr_status(f"QR stopped — {count} code(s) saved", False, count)
+
+
+qr_bridge = QrBridge()
+
+
+# ─── AI object detection (BTN 2): X7 YOLO11s on the GPU ────────────────────────
+def ai_status(text, running, provider=None):
+    """Broadcast AI detection status to WS clients so BTN 2 reflects state."""
+    if event_loop is not None and connected_clients:
+        msg = {"cmd": "ai_status", "running": bool(running), "text": text}
+        if provider is not None:
+            msg["provider"] = provider
+        asyncio.run_coroutine_threadsafe(broadcast(json.dumps(msg)), event_loop)
+
+
+class AiBridge:
+    """Runs the X7 ONNX model (Ultralytics YOLO11s, anchor-free) on the Pi camera
+    MJPEG stream and streams bounding boxes to the UI. Toggled by BTN 2
+    (cmd:"ai"). Inference runs on the GPU (CUDAExecutionProvider) when available,
+    falling back to CPU with a warning."""
+
+    def __init__(self):
+        self._thread = None
+        self._stop = threading.Event()
+        self._session = None
+        self._input_name = None
+        self._names = {}
+        self._provider = None
+
+    @property
+    def running(self):
+        return self._thread is not None and self._thread.is_alive()
+
+    def _load_session(self):
+        """Create the ONNX session once, preferring the CUDA GPU provider."""
+        if self._session is not None:
+            return True
+        if ort is None or cv2 is None:
+            return False
+        if not os.path.isfile(AI_MODEL_PATH):
+            print(f"[AI] Model not found: {AI_MODEL_PATH}")
+            ai_status("AI: model X7.onnx not found", False)
+            return False
+        try:
+            if hasattr(ort, "preload_dlls"):
+                try:
+                    ort.preload_dlls()
+                except Exception:
+                    pass
+            providers = ort.get_available_providers()
+            use = [p for p in ("CUDAExecutionProvider", "CPUExecutionProvider") if p in providers]
+            sess = ort.InferenceSession(AI_MODEL_PATH, providers=use)
+            self._session = sess
+            self._input_name = sess.get_inputs()[0].name
+            self._provider = sess.get_providers()[0]
+            # Class names are embedded in the model metadata as a dict literal.
+            meta = sess.get_modelmeta().custom_metadata_map
+            try:
+                self._names = ast.literal_eval(meta.get("names", "{}"))
+            except Exception:
+                self._names = {}
+            if self._provider != "CUDAExecutionProvider":
+                print("[AI] WARNING: running on CPU — CUDA provider unavailable")
+            print(f"[AI] Model loaded on {self._provider}")
+            return True
+        except Exception as e:
+            print(f"[AI] Failed to load model: {e}")
+            ai_status(f"AI load error: {e}", False)
+            return False
+
+    def start(self):
+        if self.running:
+            return
+        if ort is None or cv2 is None:
+            print("[AI] onnxruntime/opencv missing — run `pip install onnxruntime-gpu opencv-python`")
+            ai_status("AI unavailable — pip install onnxruntime-gpu", False)
+            return
+        self._stop.clear()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        self._stop.set()
+        self._thread = None
+
+    def _preprocess(self, frame):
+        """Letterbox to AI_IMGSZ and return (tensor, ratio, pad_x, pad_y)."""
+        h, w = frame.shape[:2]
+        r = min(AI_IMGSZ / h, AI_IMGSZ / w)
+        nw, nh = round(w * r), round(h * r)
+        resized = cv2.resize(frame, (nw, nh), interpolation=cv2.INTER_LINEAR)
+        canvas = np.full((AI_IMGSZ, AI_IMGSZ, 3), 114, dtype=np.uint8)
+        px, py = (AI_IMGSZ - nw) // 2, (AI_IMGSZ - nh) // 2
+        canvas[py:py + nh, px:px + nw] = resized
+        blob = cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+        blob = np.ascontiguousarray(blob.transpose(2, 0, 1)[None])  # 1,3,H,W
+        return blob, r, px, py
+
+    def _postprocess(self, out, r, px, py, fw, fh):
+        """Decode YOLO output (1, 4+nc, 8400) → [{label, conf, box:[x1,y1,x2,y2]}]
+        in original-frame pixel coords, with NMS."""
+        preds = out[0].T                       # (8400, 4+nc)
+        cls_scores = preds[:, 4:]
+        class_ids = np.argmax(cls_scores, axis=1)
+        confs = cls_scores[np.arange(cls_scores.shape[0]), class_ids]
+        keep = confs > AI_CONF
+        if not np.any(keep):
+            return []
+        boxes = preds[keep, :4]
+        confs = confs[keep]
+        class_ids = class_ids[keep]
+        # cx,cy,w,h (letterbox space) → x,y,w,h (original-frame space) for NMS.
+        cx, cy, bw, bh = boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3]
+        x = (cx - bw / 2 - px) / r
+        y = (cy - bh / 2 - py) / r
+        ww, hh = bw / r, bh / r
+        rects = np.stack([x, y, ww, hh], axis=1)
+        idxs = cv2.dnn.NMSBoxes(rects.tolist(), confs.tolist(), AI_CONF, AI_IOU)
+        if len(idxs) == 0:
+            return []
+        results = []
+        for i in np.array(idxs).flatten():
+            x1 = max(0, min(fw, float(x[i])))
+            y1 = max(0, min(fh, float(y[i])))
+            x2 = max(0, min(fw, float(x[i] + ww[i])))
+            y2 = max(0, min(fh, float(y[i] + hh[i])))
+            cid = int(class_ids[i])
+            results.append({
+                "label": self._names.get(cid, str(cid)),
+                "conf": round(float(confs[i]), 2),
+                "box": [round(x1), round(y1), round(x2), round(y2)],
+            })
+        return results
+
+    def _send_overlay(self, w, h, boxes):
+        if event_loop is None or not connected_clients:
+            return
+        asyncio.run_coroutine_threadsafe(
+            broadcast(json.dumps({"cmd": "ai_overlay", "w": w, "h": h, "boxes": boxes})),
+            event_loop)
+
+    def _run(self):
+        if not self._load_session():
+            return
+        stream, latest, lock, grabber = open_mjpeg_latest(AI_STREAM_URL, self._stop, "AI")
+        if stream is None:
+            ai_status("AI: cannot open camera stream", False)
+            return
+
+        had_overlay = False
+        print(f"[AI] Detection running on {self._provider}")
+        ai_status(f"AI detection on ({self._provider})", True, self._provider)
+        try:
+            while not self._stop.is_set():
+                time.sleep(0.06)   # ~15 Hz cap; inference itself is the real limiter
+                with lock:
+                    jpg = latest["jpg"]
+                    latest["jpg"] = None
+                if jpg is None:
+                    continue
+                frame = cv2.imdecode(np.frombuffer(jpg, np.uint8), cv2.IMREAD_COLOR)
+                if frame is None:
+                    continue
+                fh, fw = frame.shape[:2]
+                blob, r, px, py = self._preprocess(frame)
+                try:
+                    out = self._session.run(None, {self._input_name: blob})[0]
+                except Exception as e:
+                    print(f"[AI] Inference error: {e}")
+                    continue
+                boxes = self._postprocess(out, r, px, py, fw, fh)
+                if boxes:
+                    self._send_overlay(fw, fh, boxes)
+                    had_overlay = True
+                elif had_overlay:
+                    self._send_overlay(fw, fh, [])
+                    had_overlay = False
+        finally:
+            try:
+                stream.close()
+            except Exception:
+                pass
+            grabber.join(timeout=1.0)
+            print("[AI] Detection stopped")
+            ai_status("AI detection off", False)
+
+
+ai_bridge = AiBridge()
+
+
+# ─── Motion detection (frame differencing — flags things that are moving) ───────
+def motion_status(text, running):
+    """Broadcast motion detection status to WS clients so BTN 3 reflects state."""
+    if event_loop is not None and connected_clients:
+        msg = {"cmd": "motion_status", "running": bool(running), "text": text}
+        asyncio.run_coroutine_threadsafe(broadcast(json.dumps(msg)), event_loop)
+
+
+class MotionBridge:
+    """Detects movement in the Pi camera MJPEG stream by differencing consecutive
+    frames and streams a bounding box around each moving region to the UI.
+    Toggled by BTN 3 (cmd:"mdet"). Pure OpenCV — no model or GPU required."""
+
+    def __init__(self):
+        self._thread = None
+        self._stop = threading.Event()
+
+    @property
+    def running(self):
+        return self._thread is not None and self._thread.is_alive()
+
+    def start(self):
+        if self.running:
+            return
+        if cv2 is None:
+            print("[MOTION] OpenCV not installed — run `pip install opencv-python`")
+            motion_status("Motion unavailable — pip install opencv-python", False)
+            return
+        self._stop.clear()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        self._stop.set()
+        self._thread = None
+
+    def _send_overlay(self, w, h, boxes):
+        if event_loop is None or not connected_clients:
+            return
+        asyncio.run_coroutine_threadsafe(
+            broadcast(json.dumps({"cmd": "motion_overlay", "w": w, "h": h, "boxes": boxes})),
+            event_loop)
+
+    def _prep(self, frame):
+        """Grayscale + blur so only real movement (not sensor noise) survives."""
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        return cv2.GaussianBlur(gray, (MOTION_BLUR, MOTION_BLUR), 0)
+
+    def _run(self):
+        stream, latest, lock, grabber = open_mjpeg_latest(MOTION_STREAM_URL, self._stop, "MOTION")
+        if stream is None:
+            motion_status("Motion: cannot open camera stream", False)
+            return
+
+        prev = None
+        had_overlay = False
+        print("[MOTION] Detection running")
+        motion_status("Motion detection on", True)
+        try:
+            while not self._stop.is_set():
+                time.sleep(0.06)   # ~15 Hz cap
+                with lock:
+                    jpg = latest["jpg"]
+                    latest["jpg"] = None
+                if jpg is None:
+                    continue
+                frame = cv2.imdecode(np.frombuffer(jpg, np.uint8), cv2.IMREAD_COLOR)
+                if frame is None:
+                    continue
+                fh, fw = frame.shape[:2]
+                cur = self._prep(frame)
+                if prev is None:
+                    prev = cur
+                    continue
+                # Absolute difference → threshold → dilate to merge nearby pixels.
+                delta = cv2.absdiff(prev, cur)
+                prev = cur
+                thresh = cv2.threshold(delta, MOTION_THRESH, 255, cv2.THRESH_BINARY)[1]
+                thresh = cv2.dilate(thresh, None, iterations=2)
+                contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                boxes = []
+                for c in contours:
+                    if cv2.contourArea(c) < MOTION_MIN_AREA:
+                        continue
+                    x, y, w, h = cv2.boundingRect(c)
+                    boxes.append({"box": [x, y, x + w, y + h]})
+                if boxes:
+                    self._send_overlay(fw, fh, boxes)
+                    had_overlay = True
+                elif had_overlay:
+                    self._send_overlay(fw, fh, [])
+                    had_overlay = False
+        finally:
+            try:
+                stream.close()
+            except Exception:
+                pass
+            grabber.join(timeout=1.0)
+            print("[MOTION] Detection stopped")
+            motion_status("Motion detection off", False)
+
+
+motion_bridge = MotionBridge()
+
+
 async def handler(websocket):
     connected_clients.add(websocket)
     print(f"[WS] Client connected: {websocket.remote_address}")
@@ -479,13 +1120,37 @@ async def handler(websocket):
                     else:
                         avatar_bridge.stop()
 
+                elif cmd == "qr":
+                    state = int(obj.get("state", 0))
+                    if state:
+                        qr_bridge.start()
+                    else:
+                        qr_bridge.stop()
+
+                elif cmd == "ai":
+                    state = int(obj.get("state", 0))
+                    if state:
+                        ai_bridge.start()
+                    else:
+                        ai_bridge.stop()
+
+                elif cmd == "mdet":
+                    state = int(obj.get("state", 0))
+                    if state:
+                        motion_bridge.start()
+                    else:
+                        motion_bridge.stop()
+
             except Exception as e:
                 print(f"[WS] Error handling message: {e}")
     finally:
         connected_clients.discard(websocket)
-        # Safety: release the avatar arm if no UI is left to drive it.
+        # Safety: release the avatar arm and stop QR/AI/motion workers if no UI is left.
         if not connected_clients:
             avatar_bridge.stop()
+            qr_bridge.stop()
+            ai_bridge.stop()
+            motion_bridge.stop()
         print(f"[WS] Client disconnected: {websocket.remote_address}")
 
 
