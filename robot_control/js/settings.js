@@ -13,6 +13,7 @@ function saveSettings() {
     autoBrake:   document.getElementById("auto-brake-chk").checked,
     simFromUDPS: document.getElementById("sim-from-udps-chk").checked,
     controlMode: controlMode,
+    avatarOn: avatarOn,
   }));
 }
 
@@ -40,6 +41,7 @@ function loadSettings() {
     if (CONTROL_MODES.includes(s.controlMode)) {
       controlMode = s.controlMode;
     }
+    avatarOn = !!s.avatarOn;
     updateModeUI();
     if (s.autoConnect) {
       document.getElementById("auto-connect-chk").checked = true;
@@ -191,6 +193,7 @@ function populateHotkeyParams() {
     el.value = v || "";
   };
   setHk("hk-cycleMode", HOTKEYS.cycleMode);
+  setHk("hk-avatar",    HOTKEYS.avatar);
   setHk("hk-webcam",    HOTKEYS.webcam);
   POSTURE_NAMES.forEach(name => setHk("hk-posture-" + name, HOTKEYS.postures[name]));
 }
@@ -198,6 +201,8 @@ function populateHotkeyParams() {
 function readHotkeysFromParams() {
   const cm = document.getElementById("hk-cycleMode")?.value.trim();
   if (cm) HOTKEYS.cycleMode = cm;
+  const av = document.getElementById("hk-avatar")?.value.trim();
+  if (av) HOTKEYS.avatar = av;
   const wc = document.getElementById("hk-webcam")?.value.trim();
   if (wc) HOTKEYS.webcam = wc;
   POSTURE_NAMES.forEach(name => {
@@ -276,8 +281,14 @@ function loadParams() {
       });
       mergeControllerSettings(p.controller);
       mergeHotkeySettings(p.hotkeys);
+      mergeWebcamSettings(p.webcamRotation);
+      mergeThermalSettings(p.thermal);
+      mergeCompassSettings(p.compass);
       populateControllerParams();
       populateHotkeyParams();
+      applyWebcamToParams();
+      applyThermalToParams();
+      applyCompassToParams();
       buildPostureParamUI();
       buildServoLimitParamUI();
       buildAvatarCalibParamUI();
@@ -324,6 +335,107 @@ function applyCamerasToParams() {
   });
 }
 
+// ─── Webcam rotation (Parameters ↔ WEBCAM_ROTATION global) ─────────────────────
+function mergeWebcamSettings(deg) {
+  const d = Number(deg);
+  if ([0, 90, 180, 270].includes(d)) WEBCAM_ROTATION = d;
+}
+
+function applyWebcamToParams() {
+  const el = document.getElementById("webcam-rotation");
+  if (el) el.value = WEBCAM_ROTATION;
+}
+
+// Read the rotation select back into WEBCAM_ROTATION and apply it live.
+function readWebcamFromParams() {
+  const el = document.getElementById("webcam-rotation");
+  if (!el) return;
+  const d = parseInt(el.value, 10);
+  if ([0, 90, 180, 270].includes(d)) {
+    WEBCAM_ROTATION = d;
+    if (typeof applyWebcamRotation === "function") applyWebcamRotation();
+  }
+}
+
+// ─── Thermal camera (Parameters ↔ THERMAL global) ──────────────────────────────
+function mergeThermalSettings(obj) {
+  if (!obj || typeof obj !== "object") return;
+  const lo = Number(obj.min);
+  const hi = Number(obj.max);
+  if (Number.isFinite(lo)) THERMAL.min = lo;
+  if (Number.isFinite(hi)) THERMAL.max = hi;
+  if (typeof obj.flipH === "boolean") THERMAL.flipH = obj.flipH;
+  if (typeof obj.flipV === "boolean") THERMAL.flipV = obj.flipV;
+}
+
+function applyThermalToParams() {
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  const chk = (id, v) => { const el = document.getElementById(id); if (el) el.checked = v; };
+  set("thermal-min", THERMAL.min);
+  set("thermal-max", THERMAL.max);
+  chk("thermal-flip-h", THERMAL.flipH);
+  chk("thermal-flip-v", THERMAL.flipV);
+}
+
+// Read the thermal inputs back into THERMAL and re-render the live frame.
+function readThermalFromParams() {
+  const lo = parseFloat(document.getElementById("thermal-min")?.value);
+  const hi = parseFloat(document.getElementById("thermal-max")?.value);
+  if (!isNaN(lo)) THERMAL.min = lo;
+  if (!isNaN(hi)) THERMAL.max = hi;
+  const fh = document.getElementById("thermal-flip-h");
+  const fv = document.getElementById("thermal-flip-v");
+  if (fh) THERMAL.flipH = fh.checked;
+  if (fv) THERMAL.flipV = fv.checked;
+  // Reflect changes immediately if the thermal view is showing a frame.
+  if (typeof thermalViewActive !== "undefined" && thermalViewActive && latestThermal) {
+    renderThermal(latestThermal);
+  }
+}
+
+// ─── Compass / magnet detector (Parameters ↔ COMPASS global) ───────────────────
+function mergeCompassSettings(obj) {
+  if (!obj || typeof obj !== "object") return;
+  if (["x", "y", "z"].includes(obj.axis)) COMPASS.axis = obj.axis;
+  const t = Number(obj.threshold);
+  if (Number.isFinite(t) && t >= 0) COMPASS.threshold = t;
+}
+
+function applyCompassToParams() {
+  const ax = document.getElementById("compass-axis");
+  const th = document.getElementById("compass-threshold");
+  if (ax) ax.value = COMPASS.axis;
+  if (th) th.value = COMPASS.threshold;
+  updateCompassParamReadout();
+}
+
+// Read axis + threshold back into COMPASS and re-evaluate the live readouts.
+function readCompassFromParams() {
+  const ax = document.getElementById("compass-axis")?.value;
+  if (["x", "y", "z"].includes(ax)) COMPASS.axis = ax;
+  const t = parseFloat(document.getElementById("compass-threshold")?.value);
+  if (!isNaN(t) && t >= 0) COMPASS.threshold = t;
+  // Re-classify the last frame so the readouts and on-screen badge update now.
+  if (typeof latestCompass !== "undefined" && latestCompass) {
+    if (typeof setMagnetDisplay === "function") setMagnetDisplay(detectPole(latestCompass));
+  }
+  updateCompassParamReadout();
+}
+
+// Refresh the live x/y/z/heading + detected-pole spans in Parameters. Called
+// from applyCompass on every frame; no-ops when the elements aren't present.
+function updateCompassParamReadout() {
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  const c = (typeof latestCompass !== "undefined") ? latestCompass : null;
+  if (!c) { ["compass-x","compass-y","compass-z","compass-heading","compass-pole"].forEach(id => set(id, "—")); return; }
+  const fmt = (v) => Number.isFinite(v) ? Math.round(v) : "—";
+  set("compass-x", fmt(c.x));
+  set("compass-y", fmt(c.y));
+  set("compass-z", fmt(c.z));
+  set("compass-heading", fmt(c.heading));
+  set("compass-pole", (typeof detectPole === "function") ? detectPole(c) : "—");
+}
+
 // Read the Parameters inputs (and live zoom sliders) back into CAMERAS.
 function readCamerasFromParams() {
   CAMERAS.forEach((c, i) => {
@@ -363,6 +475,9 @@ function saveParams() {
   readServoLimitsFromParams();
   readAvatarCalibFromParams();
   readCamerasFromParams();
+  readWebcamFromParams();
+  readThermalFromParams();
+  readCompassFromParams();
 
   // Update SIM_INIT from form
   SIM_KEYS.forEach(k => {
@@ -399,6 +514,9 @@ function saveParams() {
       avatar: avatarCalibMap(),
       imuZero: IMU_ZERO,
       cameras: CAMERAS,
+      webcamRotation: WEBCAM_ROTATION,
+      thermal: THERMAL,
+      compass: COMPASS,
     })
   })
   .then(r => r.json())
@@ -448,6 +566,9 @@ function resetParams() {
       servoLimits: Object.fromEntries(SERVO_LIMIT_DEFAULTS.map(s => [s.id, { min: s.min, max: s.max }])),
       avatar: { deadband: AVATAR_DEADBAND_DEFAULT, calib: AVATAR_CALIB_DEFAULTS.map(c => ({ ...c })) },
       imuZero: { roll: 0, pitch: 0 },
+      webcamRotation: 0,
+      thermal: { ...THERMAL_DEFAULTS },
+      compass: { ...COMPASS_DEFAULTS },
     };
 
     fetch("http://localhost:8766/api/settings", {
@@ -470,6 +591,13 @@ function resetParams() {
       loadPostures(defaults);
       mergeControllerSettings(defaults.controller);
       mergeHotkeySettings(defaults.hotkeys);
+      mergeWebcamSettings(defaults.webcamRotation);
+      mergeThermalSettings(defaults.thermal);
+      mergeCompassSettings(defaults.compass);
+      applyWebcamToParams();
+      applyThermalToParams();
+      applyCompassToParams();
+      if (typeof applyWebcamRotation === "function") applyWebcamRotation();
       populateControllerParams();
       populateHotkeyParams();
       buildGearUI();
@@ -535,11 +663,15 @@ function loadParamSettings() {
       mergeControllerSettings(p.controller);
       mergeHotkeySettings(p.hotkeys);
       mergeCameraSettings(p.cameras);
+      mergeWebcamSettings(p.webcamRotation);
+      mergeThermalSettings(p.thermal);
+      mergeCompassSettings(p.compass);
       // Rebuild UI with loaded settings
       buildGearUI();
       buildServoUI();
       buildPostureUI();
       applyCamerasToParams();
+      applyWebcamToParams();
       if (typeof initCameras === "function") initCameras();
       log("Gears: " + GEARS.map((g,i) => `G${i+1}=${g}`).join("  "));
       // Push initial sim state after a short delay (give iframe time to load)
@@ -552,6 +684,7 @@ function loadParamSettings() {
       buildServoUI();
       buildPostureUI();
       applyCamerasToParams();
+      applyWebcamToParams();
       if (typeof initCameras === "function") initCameras();
       log("Gears: " + GEARS.map((g,i) => `G${i+1}=${g}`).join("  "));
       setTimeout(() => pushSimFromSliders(), 1500);

@@ -22,6 +22,27 @@ let CAMERAS = [
   { proto: "http://", url: "", zoom: 50 },
 ];
 
+// Clockwise rotation (degrees: 0/90/180/270) applied to the Pi 4 webcam overlay
+// stream. Set in Parameters, persisted to settings.json.
+let WEBCAM_ROTATION = 0;
+
+// Thermal camera (AMG8833) display config. min/max are the °C colour-scale
+// bounds; flipH/flipV mirror the 8x8 grid for the sensor's mounting (mirrors
+// thermal.py's MIN_TEMP/MAX_TEMP/FLIP_* settings). Set in Parameters,
+// persisted to settings.json.
+const THERMAL_DEFAULTS = { min: 25, max: 35, flipH: false, flipV: false };
+let THERMAL = { ...THERMAL_DEFAULTS };
+
+// Magnet-pole detector. The compass (QMC5883L) reports signed x/y/z field
+// values; a strong magnet swings one signed axis far past Earth's background.
+// `axis` picks which axis to watch and `threshold` is the magnitude (in raw
+// sensor units) past which a pole is declared: value >= +threshold → NORTH,
+// value <= -threshold → SOUTH, otherwise NONE. Set in Parameters, persisted
+// to settings.json. latestCompass holds the most recent {x,y,z,heading} frame.
+const COMPASS_DEFAULTS = { axis: "z", threshold: 500 };
+let COMPASS = { ...COMPASS_DEFAULTS };
+let latestCompass = null;
+
 // ─── Sim ──────────────────────────────────────────────────────────────────────
 // Maps SERVOS index → sim servo key (matches IDX_TO_KEY in index.html)
 const SIM_KEYS = ['front','back','arm1','arm2','extend','arm4','arm5','gripper'];
@@ -119,7 +140,7 @@ function servoLimitsMap() {
 const AVATAR_CALIB_DEFAULTS = [
   { pot: 0, sid: 3, rev: false, in0: 0,   in1: 180, out0: 40, out1: 165, name: "Arm1 shoulder" },
   { pot: 1, sid: 4, rev: true,  in0: 122, in1: 180, out0: 30, out1: 150, name: "Arm2 elbow" },
-  { pot: 2, sid: 5, rev: false, in0: 0,   in1: 180, out0: 20, out1: 180, name: "Arm3 wrist" },
+  { pot: 2, sid: 6, rev: false, in0: 0,   in1: 180, out0: 20, out1: 180, name: "Wrist J6" },
 ];
 const AVATAR_DEADBAND_DEFAULT = 2;
 let AVATAR_CALIB = AVATAR_CALIB_DEFAULTS.map(c => ({ ...c }));
@@ -159,9 +180,13 @@ let activePostureName = null;
 // Default button indices follow the W3C "standard" gamepad mapping, which both
 // Xbox and PS4 (DualShock) pads expose in modern browsers. Remappable in
 // Parameters for pads that report a non-standard mapping.
-const CONTROL_MODES = ["keyboard", "controller", "avatar"];
-const MODE_LABELS = { keyboard: "Keyboard", controller: "Controller", avatar: "Avatar" };
+const CONTROL_MODES = ["keyboard", "controller"];
+const MODE_LABELS = { keyboard: "Keyboard", controller: "Controller" };
 let controlMode  = "keyboard";
+// Avatar is an independent toggle (not a control mode): the teleop arm bridge can
+// run alongside keyboard or controller drive. Server-side bridge lives in
+// AvatarBridge (ws_server.py); the client just flips it on/off via {cmd:"avatar"}.
+let avatarOn = false;
 let gamepadIndex = null;
 let gpPrev = {};   // previous pressed state per logical button (edge detection)
 
@@ -170,7 +195,7 @@ const FLIPPER_BACK_ID  = 2;  // SERVOS id "Back Flip"
 
 const CONTROLLER_DEFAULTS = {
   buttons: { dpadUp: 12, dpadDown: 13, dpadLeft: 14, dpadRight: 15,
-             lb: 4, rb: 5, lt: 6, rt: 7, r3: 11, a: 0, b: 1, x: 2, y: 3 },
+             lb: 4, rb: 5, lt: 6, rt: 7, l3: 10, r3: 11, a: 0, b: 1, x: 2, y: 3 },
   posturesByButton: { a: "home", b: "fold", x: "stair", y: "finish" },
   flipper: { stepDeg: 2, frontRaiseSign: 1, backRaiseSign: 1 },
   triggerThreshold: 0.5,
@@ -204,12 +229,13 @@ function mergeControllerSettings(c) {
 }
 
 // ─── Keyboard hotkeys ─────────────────────────────────────────────────────────
-// Global shortcuts that fire in ANY control mode (keyboard/controller/avatar).
+// Global shortcuts that fire in ANY control mode (keyboard/controller).
 // Each value is a key string compared case-insensitively against event.key
 // (single chars stored lowercase, e.g. "m"; function keys as "F1".."F12").
 // Persisted in settings.json under "hotkeys" and editable in Parameters.
 const HOTKEYS_DEFAULTS = {
-  cycleMode: "m",                 // cycle keyboard → controller → avatar
+  cycleMode: "m",                 // cycle keyboard → controller
+  avatar:    "v",                 // toggle the avatar teleop arm on/off
   webcam:    "p",                 // toggle the webcam overlay
   // One key per posture, in POSTURE_NAMES order → F1 = home, F2 = stair, …
   postures:  Object.fromEntries(POSTURE_NAMES.map((n, i) => [n, "F" + (i + 1)])),
@@ -219,6 +245,7 @@ const HOTKEYS = JSON.parse(JSON.stringify(HOTKEYS_DEFAULTS));
 function mergeHotkeySettings(h) {
   if (!h) return;
   if (typeof h.cycleMode === "string" && h.cycleMode) HOTKEYS.cycleMode = h.cycleMode;
+  if (typeof h.avatar    === "string" && h.avatar)    HOTKEYS.avatar    = h.avatar;
   if (typeof h.webcam    === "string" && h.webcam)    HOTKEYS.webcam    = h.webcam;
   if (h.postures) {
     POSTURE_NAMES.forEach(name => {

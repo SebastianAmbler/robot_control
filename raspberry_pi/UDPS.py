@@ -132,7 +132,7 @@ class MegaSerial:
         FIX: readline() runs completely independently of send().
         No shared lock means writes never stall reads.
         """
-        print(f"[MEGA]  Read loop started — will forward ANGLES:/DATA: lines to PC:{PC_ANGLES_PORT}")
+        print(f"[MEGA]  Read loop started — will forward ANGLES:/DATA:/typed-JSON lines to PC:{PC_ANGLES_PORT}")
         last_reconnect_attempt = 0
         while True:
             try:
@@ -157,7 +157,11 @@ class MegaSerial:
                 # ── DEBUG: print every line from Mega so you can see what it sends ──
                 print(f"[MEGA RX] {repr(line)}")
 
-                if line.startswith("ANGLES:") or line.startswith("DATA:"):
+                # Forward the legacy ANGLES:/DATA: readback AND the new typed
+                # JSON broadcasts ({"type":"angles"|"compass"|"thermal",...}) the
+                # Teensy now emits. Everything else (boot/IK debug) stays local.
+                if (line.startswith("ANGLES:") or line.startswith("DATA:")
+                        or line.startswith('{"type":')):
                     if pc_addr[0] is not None:
                         dest = (pc_addr[0], PC_ANGLES_PORT)
                         forward_sock.sendto(line.encode(), dest)

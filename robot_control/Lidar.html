@@ -148,6 +148,20 @@ let scan = null;     // sensor_msgs/LaserScan
 let mapMsg = null;   // nav_msgs/OccupancyGrid
 let mapImg = null;   // offscreen canvas for the occupancy grid
 let scanHz = 0, lastScanT = 0;
+const qrMarkers = {};  // ns/id -> {x, y, text}  (QR codes placed on the map)
+
+// visualization_msgs/MarkerArray from the Pi's qr_marker_node. We only keep the
+// `qr` namespace spheres (they carry the label in .text); the `qr_text` markers
+// are RViz/Foxglove only. Honour the marker action so a fresh map clears them.
+function onMarkers(msg) {
+  (msg.markers || []).forEach(m => {
+    if (m.action === 3) { for (const k in qrMarkers) delete qrMarkers[k]; return; }  // DELETEALL
+    if (m.ns !== 'qr') return;
+    const key = m.ns + '/' + m.id;
+    if (m.action === 2) { delete qrMarkers[key]; return; }                            // DELETE
+    qrMarkers[key] = { x: m.pose.position.x, y: m.pose.position.y, text: m.text || '' };  // ADD/MODIFY
+  });
+}
 
 function buildMapImage(m) {
   const w = m.info.width, h = m.info.height;
@@ -210,6 +224,11 @@ function connect() {
             t.transform.translation.x, t.transform.translation.y, yawOf(t.transform.rotation)));
     new ROSLIB.Topic({ ros, name:'/tf', messageType:'tf2_msgs/msg/TFMessage' }).subscribe(onTf);
     new ROSLIB.Topic({ ros, name:'/tf_static', messageType:'tf2_msgs/msg/TFMessage' }).subscribe(onTf);
+
+    // QR map markers (latched on the Pi, so a fresh subscribe replays them all).
+    new ROSLIB.Topic({ ros, name:'/qr_markers',
+                       messageType:'visualization_msgs/msg/MarkerArray' })
+      .subscribe(onMarkers);
   });
   ros.on('error', () => setStatus('error — check rosbridge / IP', ''));
   ros.on('close', () => setStatus('disconnected', ''));
@@ -325,6 +344,22 @@ function drawMap(cx, cy) {
   if (robot) {
     const s = worldToScreen(robot.x, robot.y, cx, cy);
     drawRobot(s.x, s.y, robot.th);
+  }
+
+  // QR markers placed on the map (cyan dot + label), drawn in the map frame.
+  ctx.font = `${11 * DPR}px ${getComputedStyle(document.body).fontFamily}`;
+  ctx.textBaseline = 'bottom';
+  for (const k in qrMarkers) {
+    const m = qrMarkers[k];
+    const s = worldToScreen(m.x, m.y, cx, cy);
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, 5 * DPR, 0, Math.PI * 2);
+    ctx.fillStyle = '#00e5ff';
+    ctx.fill();
+    if (m.text) {
+      ctx.fillStyle = '#00e5ff';
+      ctx.fillText(m.text, s.x + 8 * DPR, s.y - 6 * DPR);
+    }
   }
 }
 
