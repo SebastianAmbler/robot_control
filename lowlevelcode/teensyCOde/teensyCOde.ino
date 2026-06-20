@@ -1,6 +1,21 @@
 #include <PWMServo.h>
 #include <ArduinoJson.h>
 #include <math.h>
+#include <Wire.h>
+#include <QMC5883LCompass.h>
+#include <Adafruit_AMG88xx.h>
+
+// ── Compass object ───────────────────────────────────────────
+QMC5883LCompass compass;
+
+// ── Thermal camera (AMG8833) ─────────────────────────────────
+Adafruit_AMG88xx amg;
+float thermalPixels[AMG88xx_PIXEL_ARRAY_SIZE];   // 64 floats
+bool  amgOk = false;                             // begin() success flag
+
+// ── I2C addresses ────────────────────────────────────────────
+#define I2C_ADDR_COMPASS 0x0D   // QMC5883L
+#define I2C_ADDR_THERMAL 0x69   // AMG8833 (default; 0x68 if jumpered)
 
 // ── Forward Kinematics (YZ plane) ────────────────────────────
 struct Vec2 { float y, z; };
@@ -34,12 +49,14 @@ bool homed = false;
 String inputBuffer = "";
 
 // ── Current servo angles ─────────────────────────────────────
-int currentAngles[8] = {90, 90, 165, 23, 20, 85, 122, 90};
+int currentAngles[8] = {90, 90, 115, 25, 0, 90, 90, 90};
 //                       0     1     2    3   4     5    6   7
 // idx:                front back  arm1 arm2 arm3 arm4 arm5 grip
 
 #define LED_PIN             13
-#define ANGLE_BROADCAST_MS  100
+#define ANGLE_BROADCAST_MS  200
+#define COMPASS_BROADCAST_MS 200
+#define THERMAL_BROADCAST_MS 200
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -49,9 +66,9 @@ int currentAngles[8] = {90, 90, 165, 23, 20, 85, 122, 90};
 //  in moveServoById(); the values here are secondary guards only.
 // ═══════════════════════════════════════════════════════════════
 
-const int SERVO_MIN[8] = {0,   30,  0,  25,  0,  0,  0,  0};
+const int SERVO_MIN[8] = {0,   30,  50,  25,  0,  0,  0,  0};
 
-const int SERVO_MAX[8] = {180, 150, 180, 150, 180, 180, 180, 180};
+const int SERVO_MAX[8] = {180, 150, 130, 150, 155, 180, 180, 180};
 
 // ── Helper: clamp angle to per-joint hard limits ─────────────
 // id is 1-based (servo id as used in JSON commands)
@@ -348,15 +365,88 @@ void handleJson(String &line) {
 // ═══════════════════════════════════════════════════════════════
 
 void broadcastAngles() {
-  Serial.print(F("ANGLES:"));
-  Serial.print(servoFrontMotor.read()); Serial.print(F(","));
-  Serial.print(servoBackMotor.read());  Serial.print(F(","));
-  Serial.print(servoarm1.read());       Serial.print(F(","));
-  Serial.print(servoarm2.read());       Serial.print(F(","));
-  Serial.print(servoarm3.read());       Serial.print(F(","));
-  Serial.print(servoarm4.read());       Serial.print(F(","));
-  Serial.print(servoarm5.read());       Serial.print(F(","));
-  Serial.println(gripper.read());
+  // Hand-built JSON (no JsonDocument needed — fixed shape, runs at 10 Hz,
+  // so building the string directly avoids parser/allocation overhead).
+  // "type":"angles" is the identifier so the receiver knows what this is.
+  Serial.print(F("{\"type\":\"angles\",\"front\":"));
+  Serial.print(servoFrontMotor.read());
+  Serial.print(F(",\"back\":"));
+  Serial.print(servoBackMotor.read());
+  Serial.print(F(",\"arm1\":"));
+  Serial.print(servoarm1.read());
+  Serial.print(F(",\"arm2\":"));
+  Serial.print(servoarm2.read());
+  Serial.print(F(",\"arm3\":"));
+  Serial.print(servoarm3.read());
+  Serial.print(F(",\"arm4\":"));
+  Serial.print(servoarm4.read());
+  Serial.print(F(",\"arm5\":"));
+  Serial.print(servoarm5.read());
+  Serial.print(F(",\"grip\":"));
+  Serial.print(gripper.read());
+  Serial.println(F("}"));
+}
+
+// Read the QMC5883L and emit one JSON line tagged "type":"compass".
+// heading = getAzimuth() (0–359°, magnetic). Drop it if you don't need it.
+void broadcastCompass() {
+  compass.read();
+  int x = compass.getX();
+  int y = compass.getY();
+  int z = compass.getZ();
+  int heading = compass.getAzimuth();
+
+  Serial.print(F("{\"type\":\"compass\",\"x\":"));
+  Serial.print(x);
+  Serial.print(F(",\"y\":"));
+  Serial.print(y);
+  Serial.print(F(",\"z\":"));
+  Serial.print(z);
+  Serial.print(F(",\"heading\":"));
+  Serial.print(heading);
+  Serial.println(F("}"));
+}
+
+
+// Read the AMG8833 8x8 grid and emit one JSON line tagged "type":"thermal".
+// "data" is a 64-element array of deg-C values, row-major (same order as
+// AMG88xx_PIXEL_ARRAY_SIZE). Skipped if the sensor failed to init.
+void broadcastThermal() {
+  if (!amgOk) return;
+  amg.readPixels(thermalPixels);
+
+  Serial.print(F("{\"type\":\"thermal\",\"data\":["));
+  for (int i = 0; i < AMG88xx_PIXEL_ARRAY_SIZE; i++) {
+    Serial.print(thermalPixels[i], 2);                 // 2 decimal places
+    if (i < AMG88xx_PIXEL_ARRAY_SIZE - 1) Serial.print(',');
+  }
+  Serial.println(F("]}"));
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  I2C HELPER
+// ═══════════════════════════════════════════════════════════════
+
+// Block until an I2C device ACKs at the given 7-bit address.
+// Wire.begin() must already have been called. Blinks the LED and logs
+// while waiting so a missing/unwired device is obvious at boot instead
+// of silently proceeding with a dead sensor.
+void waitForI2C(uint8_t addr, const char* name) {
+  Wire.beginTransmission(addr);
+  while (Wire.endTransmission() != 0) {
+    Serial.print(F("[I2C] waiting for "));
+    Serial.print(name);
+    Serial.print(F(" @0x"));
+    Serial.println(addr, HEX);
+    digitalWrite(LED_PIN, HIGH); delay(100);
+    digitalWrite(LED_PIN, LOW);  delay(400);
+    Wire.beginTransmission(addr);
+  }
+  Serial.print(F("[I2C] "));
+  Serial.print(name);
+  Serial.print(F(" connected @0x"));
+  Serial.println(addr, HEX);
 }
 
 
@@ -376,20 +466,42 @@ void setup() {
   delay(1000);
 
   Serial.begin(115200);
-  Serial.println(F("=== BOOT — rescue_arm_ik ==="));
+  Serial.println(F("=== BOOT — rescue_arm_ik + compass ==="));
   digitalWrite(LASER, 0);
 
-  // Wire.begin();
+  // ── I2C bus + sensor init ──────────────────────────────────
+  // Wire must start before any device init. We then block on each
+  // device until it ACKs on the bus, so we never proceed to init a
+  // sensor that isn't actually connected yet.
+  Wire.begin();
+
+  // Compass: wait for the QMC5883L to appear before init/calibration.
+  waitForI2C(I2C_ADDR_COMPASS, "QMC5883L compass");
+  compass.init();
+  compass.setCalibrationOffsets(600.00, 654.00, 882.00);
+  compass.setCalibrationScales(1.31, 0.75, 1.10);
+  Serial.println(F("Compass init OK"));
+
+  // Thermal camera (shares the I2C bus, default addr 0x69): wait for it
+  // to ACK, then init. begin() still gates broadcasts via amgOk.
+  waitForI2C(I2C_ADDR_THERMAL, "AMG8833 thermal");
+  amgOk = amg.begin(I2C_ADDR_THERMAL);
+  if (amgOk) {
+    Serial.println(F("AMG8833 init OK"));
+  } else {
+    Serial.println(F("AMG8833 NOT found - thermal disabled"));
+  }
+
   // if (!mpu.setup(0x68)) { Serial.println(F("MPU FAIL")); }
   // else                  { Serial.println(F("MPU OK"));   }
 
   servoFrontMotor.attach(PIN_FRONT);  servoFrontMotor.write(90);   currentAngles[0] = 90;
   servoBackMotor.attach(PIN_BACK);    servoBackMotor.write(90);   currentAngles[1] = 90;
-  servoarm1.attach(PIN_ARM1);         servoarm1.write(90);        currentAngles[2] = 90;
+  servoarm1.attach(PIN_ARM1);         servoarm1.write(115);        currentAngles[2] = 115;
   servoarm2.attach(PIN_ARM2);         servoarm2.write(25);        currentAngles[3] = 25;
-  servoarm3.attach(PIN_ARM3);         servoarm3.write(20);          currentAngles[4] = 20;
-  servoarm4.attach(PIN_ARM4);         servoarm4.write(85);        currentAngles[5] = 85;
-  servoarm5.attach(PIN_ARM5);         servoarm5.write(122);        currentAngles[6] = 122;
+  servoarm3.attach(PIN_ARM3);         servoarm3.write(0);          currentAngles[4] = 0;
+  servoarm4.attach(PIN_ARM4);         servoarm4.write(90);        currentAngles[5] = 90;
+  servoarm5.attach(PIN_ARM5);         servoarm5.write(90);        currentAngles[6] = 90;
   gripper.attach(PIN_MOTOR);          gripper.write(90);    currentAngles[7] = 90;
 
   Serial.println(F("Servos attached. Home on first loop."));
@@ -422,13 +534,13 @@ void loop() {
 
   // Home once
   if (!homed) {
-    servoFrontMotor.write(90);  currentAngles[0] = 90;  delay(200);
-    servoBackMotor.write(90);  currentAngles[1] = 90; delay(200);
-    servoarm1.write(90);       currentAngles[2] = 90; delay(200);
-    servoarm2.write(25);       currentAngles[3] = 25; delay(200);
-    servoarm3.write(20);        currentAngles[4] = 20;  delay(200);
-    servoarm4.write(85);        currentAngles[5] = 85;  delay(200);
-    servoarm5.write(122);       currentAngles[6] = 122; delay(200);
+    servoFrontMotor.write(90);   currentAngles[0] = 90;  delay(200);
+    servoBackMotor.write(90);   currentAngles[1] = 90; delay(200);
+    servoarm1.write(115);        currentAngles[2] = 115; delay(200);
+    servoarm2.write(25);        currentAngles[3] = 25; delay(200);
+    servoarm3.write(0);          currentAngles[4] = 0;  delay(200);
+    servoarm4.write(90);        currentAngles[5] = 90;  delay(200);
+    servoarm5.write(90);        currentAngles[6] = 90; delay(200);
     gripper.write(90);   currentAngles[7] = 90;
     homed = true;
     Serial.println(F("Homed"));
@@ -438,6 +550,20 @@ void loop() {
   if (millis() - lastBroadcast >= ANGLE_BROADCAST_MS) {
     broadcastAngles();
     lastBroadcast = millis();
+  }
+
+  // Broadcast compass at 5 Hz
+  static uint32_t lastCompass = 0;
+  if (millis() - lastCompass >= COMPASS_BROADCAST_MS) {
+    broadcastCompass();
+    lastCompass = millis();
+  }
+
+  // Broadcast thermal grid at 10 Hz (sensor max frame rate)
+  static uint32_t lastThermal = 0;
+  if (millis() - lastThermal >= THERMAL_BROADCAST_MS) {
+    broadcastThermal();
+    lastThermal = millis();
   }
 
   // Read incoming JSON
