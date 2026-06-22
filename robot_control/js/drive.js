@@ -34,6 +34,21 @@ function toggleLock() {
   log("Motors " + (isLocked ? "LOCKED" : "RELEASED"), isLocked ? "warn" : "info");
 }
 
+// ─── Laser / LED toggles ──────────────────────────────────────────────────────
+function toggleLaser() {
+  laserOn = !laserOn;
+  send({ cmd: "laser", state: laserOn ? 1 : 0 });
+  document.getElementById("laser-btn").className = "header-toggle" + (laserOn ? " active" : "");
+  log("Laser " + (laserOn ? "ON" : "OFF"), "info");
+}
+
+function toggleLed() {
+  ledOn = !ledOn;
+  send({ cmd: "led", state: ledOn ? 1 : 0 });
+  document.getElementById("led-btn").className = "header-toggle" + (ledOn ? " active" : "");
+  log("LED " + (ledOn ? "ON" : "OFF"), "info");
+}
+
 // ─── Key handling (send on change + keepalive) ────────────────────────────────
 
 function setKey(k, active) {
@@ -51,13 +66,13 @@ function computeMotion() {
 
   // Normalize diagonal
   if (lin !== 0 && ang !== 0) {
-    lin *= 0.707;
-    ang *= 0.707;
+    lin *= 1;
+    ang *= 1;
   }
 
   const scale = GEARS[gear] / MAX_RPM;
   lin *= scale;
-  ang *= scale * 1.7;
+  ang *= scale * 1.5;
 
   return { linear: lin, angular: ang };
 }

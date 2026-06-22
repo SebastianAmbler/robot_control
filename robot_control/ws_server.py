@@ -25,7 +25,7 @@ import time
 import mimetypes
 import webbrowser
 import urllib.request
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, unquote
 
 try:
@@ -331,7 +331,7 @@ class SettingsHTTPHandler(BaseHTTPRequestHandler):
 
 def run_http_server():
     """Run HTTP server for settings I/O in a separate thread."""
-    server = HTTPServer(("0.0.0.0", HTTP_PORT), SettingsHTTPHandler)
+    server = ThreadingHTTPServer(("0.0.0.0", HTTP_PORT), SettingsHTTPHandler)
     print(f"[HTTP] Static file + settings server on http://localhost:{HTTP_PORT}")
     server.serve_forever()
 
@@ -1111,6 +1111,13 @@ async def handler(websocket):
                         "id": servo_id,
                         "angle": angle
                     }).encode()
+                    udp_sock.sendto(bytes([0xAA]) + payload, (PI_IP, UDP_SERVO_PORT))
+
+                elif cmd in ("laser", "led"):
+                    # Forward straight to the Teensy over the same serial path as
+                    # servo (0xAA-marked JSON on UDP_SERVO_PORT). state: 1=on, 0=off.
+                    state = int(obj.get("state", 0))
+                    payload = json.dumps({"cmd": cmd, "state": state}).encode()
                     udp_sock.sendto(bytes([0xAA]) + payload, (PI_IP, UDP_SERVO_PORT))
 
                 elif cmd == "avatar":

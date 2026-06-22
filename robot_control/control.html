@@ -85,6 +85,23 @@
   }
   #lock-btn:hover { border-color: var(--warn); color: var(--warn); }
   #lock-btn.locked { border-color: var(--danger); color: var(--danger); }
+  .header-toggle {
+    font-family: var(--font);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    padding: 4px 12px;
+    background: transparent;
+    border: 1px solid var(--border2);
+    color: var(--text);
+    cursor: pointer;
+    text-transform: uppercase;
+  }
+  .header-toggle:hover { border-color: var(--accent); color: var(--accent); }
+  .header-toggle.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(200,255,0,0.06);
+  }
 
   /* ── Panels ── */
   #left-panel {
@@ -1386,6 +1403,8 @@
     <button class="webcam-tool-btn" id="thermal-toggle-btn" onclick="toggleThermalView()" title="Toggle thermal camera">THERMAL</button>
   </div>
   <div class="spacer"></div>
+  <button id="laser-btn" class="header-toggle" onclick="toggleLaser()" title="Toggle laser">Laser</button>
+  <button id="led-btn" class="header-toggle" onclick="toggleLed()" title="Toggle LED">LED</button>
   <button id="lock-btn" onclick="toggleLock()">Lock</button>
   <button id="settings-btn" onclick="openSettings()" title="Settings">Settings</button>
 </div>
@@ -1572,6 +1591,9 @@
     <div id="board-status">
       <div class="board-row magnet-row" id="magnet-row" title="Magnet pole detected from the compass field (set axis/threshold in Parameters)">
         <span class="board-name">Magnet</span><span id="magnet-value">—</span>
+      </div>
+      <div class="board-row" title="SLAM mapping active (toggle with the SLAM button)">
+        <span class="board-dot" id="slam-dot"></span><span class="board-name">SLAM</span>
       </div>
       <div class="board-row" title="IMU sensor connection">
         <span class="board-dot" id="imu-dot"></span><span class="board-name">IMU</span>
@@ -1998,14 +2020,24 @@
   // SLAM / Save Map drive ROS std_srvs/Trigger services on the Pi. We can't call
   // them directly (the lidar iframe owns the rosbridge connection), so we relay
   // requests to it via postMessage and react to the {type:'slamResult'} reply.
-  var slamOn = false;
+  var slamOn = false;   // last start/stop command intent (slam_toolbox up/down) — drives the button
   function lidarPost(msg) {
     var f = document.getElementById('lidar-iframe');
     try { f.contentWindow.postMessage(msg, '*'); } catch (e) { /* iframe not ready yet */ }
   }
+  // The toolbar button reflects the start/stop command intent. The SLAM board dot is
+  // driven straight from the Pi's /slam/active topic (real mapping state) — see the
+  // 'slamActive' message handler below — so it also honours the arm-home auto-pause.
+  function setSlamButton(on) {
+    slamOn = on;
+    document.getElementById('slam-toggle-btn').classList.toggle('active', on);
+  }
+  function setSlamDot(active) {
+    var dot = document.getElementById('slam-dot');
+    if (dot) dot.className = 'board-dot' + (active ? ' on' : '');
+  }
   function slamToggle() {
-    slamOn = !slamOn;
-    document.getElementById('slam-toggle-btn').classList.toggle('active', slamOn);
+    setSlamButton(!slamOn);
     lidarPost({ type: slamOn ? 'slamStart' : 'slamStop' });
   }
   function mapSave() {
@@ -2014,12 +2046,18 @@
 
   window.addEventListener('message', function (e) {
     var d = e.data;
-    if (!d || typeof d !== 'object' || d.type !== 'slamResult') return;
+    if (!d || typeof d !== 'object') return;
+    // Lidar.html reports whether /scan data is currently flowing so the Lidar
+    // board dot can light up (the iframe's own status bar is hidden in embed mode).
+    if (d.type === 'lidarStatus') { if (d.receiving) lastLidarMsg = Date.now(); return; }
+    // SLAM board dot comes directly from the Pi: true = mapping live, false = stopped
+    // or paused (incl. the arm-home auto-pause). The button intent is left untouched.
+    if (d.type === 'slamActive') { setSlamDot(!!d.active); return; }
+    if (d.type !== 'slamResult') return;
     if (typeof log === 'function') log(d.message, d.success ? 'info' : 'error');
     // A failed start/stop leaves the hardware in its prior state — revert the button.
     if (!d.success && (d.cmd === 'start' || d.cmd === 'stop')) {
-      slamOn = !slamOn;
-      document.getElementById('slam-toggle-btn').classList.toggle('active', slamOn);
+      setSlamButton(!slamOn);
     }
   });
 

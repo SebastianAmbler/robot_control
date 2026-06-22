@@ -349,6 +349,13 @@ void handleJson(String &line) {
     Serial.print(F("[LASER] "));
     Serial.println(state ? F("ON") : F("OFF"));
   }
+  // ── LED control ───────────────────────────────────────────
+  else if (strcmp(cmd, "led") == 0) {
+    int state = doc["state"] | 0;   // 1 = on, 0 = off
+    digitalWrite(LED, state ? HIGH : LOW);
+    Serial.print(F("[LED] "));
+    Serial.println(state ? F("ON") : F("OFF"));
+  }
   else {
     Serial.print(F("[WARN] unknown cmd: ")); Serial.println(cmd);
   }
@@ -457,6 +464,8 @@ void waitForI2C(uint8_t addr, const char* name) {
 void setup() {
   pinMode(LED_PIN, OUTPUT);
   pinMode(LASER, OUTPUT);
+  pinMode(LED, OUTPUT);
+  digitalWrite(LED, LOW);
 
   for (int i = 0; i < 5; i++) {
     digitalWrite(LED_PIN, HIGH); delay(200);

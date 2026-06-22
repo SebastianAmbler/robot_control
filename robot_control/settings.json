@@ -196,7 +196,7 @@
     "deadzone": 0.15
   },
   "hotkeys": {
-    "cycleMode": "m",
+    "cycleMode": "\\",
     "avatar": "t",
     "webcam": "p",
     "postures": {
@@ -294,7 +294,7 @@
       "zoom": 50
     }
   ],
-  "webcamRotation": 270,
+  "webcamRotation": 0,
   "thermal": {
     "min": 25,
     "max": 37,

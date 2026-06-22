@@ -192,7 +192,30 @@ function buildMapImage(m) {
 // ─── rosbridge connection ─────────────────────────────────────────────────────
 let ros = null;
 let mapTopic = null;
+let reconnectTimer = null;     // pending auto-reconnect (one in flight at a time)
+let lastScanMsgT = 0;          // wall-clock ms of the last /scan message received
+const RECONNECT_MS = 2000;     // delay before retrying a dropped connection
+const SCAN_STALE_MS = 1500;    // no /scan for this long → dot drops back to "waiting"
 function setStatus(s, cls) { stat.textContent = s; dot.className = cls || ''; }
+
+// Auto-reconnect: schedule a single retry of connect() after a dropped link.
+function scheduleReconnect() {
+  if (reconnectTimer) return;
+  reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, RECONNECT_MS);
+}
+
+// Lidar receive watchdog: the dot is green only while /scan data is actually
+// flowing. Keyed purely off the time of the last /scan message — rosbridge being
+// connected isn't enough, we wait for real lidar (and don't depend on roslib's
+// isConnected flag, which isn't reliable across versions).
+setInterval(() => {
+  const fresh = lastScanMsgT && (Date.now() - lastScanMsgT < SCAN_STALE_MS);
+  if (fresh) setStatus('receiving lidar — ' + scanHz.toFixed(1) + ' Hz', 'on');
+  else if (dot.className === 'on') setStatus('connected — waiting for scan', 'wait');
+  // Report to the embedding control.html so its Lidar board dot can light up —
+  // in embed mode this bar is hidden, so the parent needs the signal directly.
+  try { window.parent.postMessage({ type: 'lidarStatus', receiving: !!fresh, hz: scanHz }, '*'); } catch (_) {}
+}, 400);
 
 // (Re)subscribe to /map. The grid is latched/transient, so a fresh subscribe is
 // the reliable way to (re)fetch the last map — used on connect and when entering
@@ -205,16 +228,20 @@ function subscribeMap() {
 }
 
 function connect() {
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
   const url = 'ws://' + document.getElementById('wsAddr').value.trim();
   if (ros) { try { ros.close(); } catch(_){} }
   setStatus('connecting ' + url, 'wait');
-  ros = new ROSLIB.Ros({ url });
+  // Capture this connection so a late close/error from a *previous* ros (e.g. the
+  // one we just closed above) doesn't trigger a spurious reconnect.
+  const r = new ROSLIB.Ros({ url });
+  ros = r;
 
-  ros.on('connection', () => {
-    setStatus('connected', 'on');
+  r.on('connection', () => {
+    setStatus('connected — waiting for scan', 'wait');
     new ROSLIB.Topic({ ros, name:'/scan', messageType:'sensor_msgs/msg/LaserScan',
                        throttle_rate: 80, queue_length: 1 })
-      .subscribe(m => { scan = m; const t = performance.now();
+      .subscribe(m => { scan = m; lastScanMsgT = Date.now(); const t = performance.now();
         if (lastScanT) scanHz = 0.8*scanHz + 0.2*(1000/(t-lastScanT)); lastScanT = t; });
 
     subscribeMap();
@@ -229,9 +256,15 @@ function connect() {
     new ROSLIB.Topic({ ros, name:'/qr_markers',
                        messageType:'visualization_msgs/msg/MarkerArray' })
       .subscribe(onMarkers);
+
+    // Real SLAM state straight from the Pi (latched Bool): true = mapping live,
+    // false = stopped or paused (incl. the arm-home auto-pause). Forward it to the
+    // parent UI so the SLAM board dot reflects actual state, not the button click.
+    new ROSLIB.Topic({ ros, name:'/slam/active', messageType:'std_msgs/msg/Bool' })
+      .subscribe(m => window.parent.postMessage({ type:'slamActive', active: !!m.data }, '*'));
   });
-  ros.on('error', () => setStatus('error — check rosbridge / IP', ''));
-  ros.on('close', () => setStatus('disconnected', ''));
+  r.on('error', () => { if (ros === r) { lastScanMsgT = 0; setStatus('error — retrying…', ''); scheduleReconnect(); } });
+  r.on('close', () => { if (ros === r) { lastScanMsgT = 0; setStatus('disconnected — retrying…', ''); scheduleReconnect(); window.parent.postMessage({ type:'slamActive', active:false }, '*'); } });
 }
 document.getElementById('btnConnect').onclick = connect;
 

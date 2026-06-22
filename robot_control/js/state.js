@@ -85,6 +85,8 @@ let IMU_ZERO = { roll: 0, pitch: 0 };
 let ws        = null;
 let gear      = 0;   // 0-indexed gear (0 = gear 1)
 let isLocked  = false;
+let laserOn   = false;
+let ledOn     = false;
 let autoBrake = false;
 let keys      = { w:false, a:false, s:false, d:false };
 let lastLinear  = null;

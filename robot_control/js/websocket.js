@@ -11,6 +11,7 @@ const RECONNECT_MAX = 16000;
 // the Pi. ESP32 → motor telemetry (T:3); Teensy/arm → ANGLES:/DATA: readback.
 let lastEsp32Msg   = 0;
 let lastTeensyMsg  = 0;
+let lastLidarMsg   = 0;   // set from Lidar.html iframe postMessage while /scan flows
 const BOARD_TIMEOUT = 2500;  // ms without data before a board is considered offline
 
 function setAutoStatus(msg) {
@@ -149,6 +150,9 @@ function updateBoardStatus() {
   setDot("esp32-dot",  open && (now - lastEsp32Msg)  < BOARD_TIMEOUT);
   const teensyAlive = open && (now - lastTeensyMsg) < BOARD_TIMEOUT;
   setDot("teensy-dot", teensyAlive);
+  // Lidar runs over its own rosbridge link (the iframe), not the main WS — so it's
+  // gated only on fresh /scan reports, independent of `open`.
+  setDot("lidar-dot", (now - lastLidarMsg) < BOARD_TIMEOUT);
   // Magnet detection comes from the Teensy's compass; blank it when stale so a
   // stale "NORTH"/"SOUTH" never lingers after the board goes quiet.
   if (!teensyAlive && typeof setMagnetDisplay === "function") setMagnetDisplay(null);
