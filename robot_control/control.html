@@ -1455,7 +1455,7 @@
            decoded into this canvas by startWebcamStream() in js/main.js (each
            decoded bitmap is closed right after drawing, so tab RAM stays flat —
            unlike an <img> MJPEG, which leaks decoded frames in Chromium). -->
-      <canvas id="webcam-stream" style="width:100%;height:100%;object-fit:contain;display:block"></canvas>
+      <canvas id="webcam-stream" style="width:100%;height:100%;object-fit:cover;display:block"></canvas>
       <!-- QR bounding-box overlay — drawn by drawQrOverlay() in js/main.js from
            {"cmd":"qr_overlay"} frames while QR logging (BTN 1) is active. -->
       <canvas id="qr-overlay-canvas"

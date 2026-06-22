@@ -580,7 +580,7 @@ function clearQrOverlay() {
   if (c && c.getContext) c.getContext("2d").clearRect(0, 0, c.width, c.height);
 }
 
-// Map a source-frame point through rotation + object-fit:contain to canvas pixels.
+// Map a source-frame point through rotation + object-fit:cover to canvas pixels.
 // Shared by the QR and AI overlays (the server sends coords in source-frame px).
 function mapStreamPoint(sx, sy, fw, fh, dw, dh) {
   const r = ((Number(WEBCAM_ROTATION) || 0) % 360 + 360) % 360;
@@ -588,8 +588,8 @@ function mapStreamPoint(sx, sy, fw, fh, dw, dh) {
   if (r === 90)  { x = fh - sy; y = sx;       rw = fh; rh = fw; }
   else if (r === 180) { x = fw - sx; y = fh - sy; }
   else if (r === 270) { x = sy;      y = fw - sx; rw = fh; rh = fw; }
-  // object-fit:contain — scale to fit, centre, letterbox the slack.
-  const scale = Math.min(dw / rw, dh / rh);
+  // object-fit:cover — scale to fill, centre, crop the overflow.
+  const scale = Math.max(dw / rw, dh / rh);
   return [x * scale + (dw - rw * scale) / 2, y * scale + (dh - rh * scale) / 2];
 }
 
