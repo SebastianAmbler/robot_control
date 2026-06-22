@@ -27,6 +27,7 @@ setup(
             "imu_node = lidar_slam_bringup.imu_node:main",
             "imu_udp_bridge = lidar_slam_bringup.imu_udp_bridge:main",
             "slam_manager = lidar_slam_bringup.slam_manager:main",
+            "arm_home_guard = lidar_slam_bringup.arm_home_guard:main",
         ],
     },
 )

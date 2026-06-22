@@ -1,0 +1,8 @@
+# ROS2 colcon build artifacts (machine-specific, do not commit)
+/build/
+/install/
+/log/
+
+# Python caches
+__pycache__/
+*.pyc

@@ -1,1 +1,0 @@
-Invoking command in '/home/pi/ros2_ws/build/rf2o_laser_odometry': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/humble /usr/bin/cmake /home/pi/ros2_ws/src/rf2o_laser_odometry -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/home/pi/ros2_ws/install/rf2o_laser_odometry

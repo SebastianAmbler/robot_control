@@ -61,6 +61,7 @@ def generate_launch_description():
     pc_ip = LaunchConfiguration("pc_ip")
     start_esp32_bridge = LaunchConfiguration("start_esp32_bridge")
     start_servo_bridge = LaunchConfiguration("start_servo_bridge")
+    start_arm_guard = LaunchConfiguration("start_arm_guard")
     scripts_dir = LaunchConfiguration("scripts_dir")
 
     args = [
@@ -71,11 +72,14 @@ def generate_launch_description():
         DeclareLaunchArgument("imu_port", default_value="/dev/imu"),
         # Forward /imu/data to the Windows UI over UDP (broadcast if pc_ip empty).
         DeclareLaunchArgument("start_imu_bridge", default_value="true"),
-        DeclareLaunchArgument("pc_ip", default_value=""),
+        DeclareLaunchArgument("pc_ip", default_value="192.168.1.67"),
         # Standalone (non-ROS) bridges in scripts_dir: UDP.py (ESP32 drive),
         # UDPS.py (Teensy/Mega servos). Set false if you run them by hand.
         DeclareLaunchArgument("start_esp32_bridge", default_value="true"),
         DeclareLaunchArgument("start_servo_bridge", default_value="true"),
+        # Pause SLAM while the arm is out of its home pose (taps UDPS.py's
+        # local arm-angle forward on 127.0.0.1:3393).
+        DeclareLaunchArgument("start_arm_guard", default_value="true"),
         DeclareLaunchArgument("scripts_dir",
                               default_value=os.path.expanduser("~")),
     ]
@@ -185,6 +189,23 @@ def generate_launch_description():
         }],
     )
 
+    # --- arm_home_guard: pause SLAM while the arm is out of its home pose ---
+    # Listens to UDPS.py's local arm-angle tap and toggles slam_toolbox's
+    # pause_new_measurements so scans aren't integrated while the arm is
+    # deployed (it occludes the lidar / changes the footprint).
+    arm_home_guard = Node(
+        package="lidar_slam_bringup",
+        executable="arm_home_guard",
+        name="arm_home_guard",
+        output="screen",
+        condition=IfCondition(start_arm_guard),
+        parameters=[{
+            "listen_port": 3393,
+            "tolerance": 5,
+            "resume_stable_sec": 1.0,
+        }],
+    )
+
     # --- Static transforms ---
     # NOTE: base_link -> laser_frame is published by ydlidar_launch.py
     #       (default z=0.02). Adjust it there to match your mount.
@@ -218,5 +239,5 @@ def generate_launch_description():
 
     return LaunchDescription(args + [
         lidar, rf2o_with_ekf, rf2o_no_ekf, imu, imu_bridge, ekf, slam_manager,
-        tf_imu, rosbridge, esp32_bridge, servo_bridge,
+        arm_home_guard, tf_imu, rosbridge, esp32_bridge, servo_bridge,
     ])
