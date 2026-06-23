@@ -13,6 +13,8 @@ function buildGearUI() {
     pip.className = "gear-pip" + (i === gear ? " active" : "");
     pip.id = "gpip-" + i;
     pip.textContent = i + 1;
+    pip.title = "Gear " + (i + 1) + " — " + GEARS[i] + " RPM max";
+    pip.addEventListener("click", () => setGear(i));   // click a pip to jump to that gear
     gd.appendChild(pip);
   }
 }
@@ -24,6 +26,46 @@ function updateGearUI() {
 }
 
 // Note: buildGearUI() is called after settings are loaded in loadParamSettings()
+
+// ─── Servo step selector ───────────────────────────────────────────────────────
+// Pips 1-5 (in the left panel, styled like the gear pips) pick how many degrees
+// each +/- nudge moves the active servo. Hotkeys 1-5 select the same.
+const SERVO_STEP_CHOICES = [1, 2, 3, 4, 5];
+
+function buildServoStepUI() {
+  const sd = document.getElementById("servo-step-display");
+  sd.innerHTML = "";
+  SERVO_STEP_CHOICES.forEach(n => {
+    const pip = document.createElement("div");
+    pip.className = "gear-pip" + (n === SERVO_STEP ? " active" : "");
+    pip.id = "sstep-" + n;
+    pip.textContent = n;
+    pip.title = "Servo step " + n + "° (hotkey " + n + ")";
+    pip.addEventListener("click", () => setServoStep(n));
+    sd.appendChild(pip);
+  });
+}
+
+function updateServoStepUI() {
+  SERVO_STEP_CHOICES.forEach(n => {
+    const pip = document.getElementById("sstep-" + n);
+    if (pip) pip.className = "gear-pip" + (n === SERVO_STEP ? " active" : "");
+  });
+  // Keep the per-servo −/+ button tooltips in sync with the chosen step.
+  SERVOS.forEach(s => {
+    const dec = document.getElementById("sv-dec-" + s.id);
+    const inc = document.getElementById("sv-inc-" + s.id);
+    if (dec) dec.title = s.name + " −" + SERVO_STEP + "°";
+    if (inc) inc.title = s.name + " +" + SERVO_STEP + "°";
+  });
+}
+
+function setServoStep(n) {
+  if (!SERVO_STEP_CHOICES.includes(n)) return;
+  SERVO_STEP = n;
+  updateServoStepUI();
+  log("Servo step — " + SERVO_STEP + "° per nudge");
+}
 
 // ─── Lock ─────────────────────────────────────────────────────────────────────
 function toggleLock() {
@@ -141,11 +183,18 @@ function sendMotionNow() {
 // Send immediately on any state change — bypasses buffer check
 let autoBraked = false;  // true when auto-brake has engaged (separate from manual isLocked)
 
-function cycleGear() {
-  gear = (gear + 1) % GEARS.length;
+// Jump straight to a gear (used by the clickable gear pips). cycleGear() routes
+// through here too so keyboard ('g') and click share one code path.
+function setGear(g) {
+  if (g < 0 || g >= GEARS.length) return;
+  gear = g;
   updateGearUI();
   sendMotionNow();
   log("Gear " + (gear+1) + " — " + GEARS[gear] + " RPM max");
+}
+
+function cycleGear() {
+  setGear((gear + 1) % GEARS.length);
 }
 
 // Shared by keyboard and gamepad: call after `keys` changes.
@@ -184,6 +233,7 @@ document.addEventListener("keydown", e => {
     if (nudgeActiveServo(-SERVO_STEP)) e.preventDefault();
     return;
   }
+  if (k >= "1" && k <= "5") { setServoStep(parseInt(k, 10)); e.preventDefault(); return; }
   if (k === "escape") { activeServoId = null; updateActiveServoUI(); }
   if (controlMode !== "keyboard") return;  // WASD/gear only in keyboard mode
   let moved = false;

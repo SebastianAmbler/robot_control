@@ -1,7 +1,10 @@
 {
   // Stop VS Code from auto-detecting/forwarding the robot server's local ports.
-  // The auto-forward proxy was binding 127.0.0.1:8766 and shadowing the real
-  // ws_server.py listener on 0.0.0.0:8766, which made http://localhost:8766 hang.
+  // The auto-forward proxy was binding 127.0.0.1 on the server's HTTP port and
+  // shadowing the real ws_server.py listener on 0.0.0.0, which made the UI hang
+  // on "waiting for localhost". The server HTTP port has since moved to 8780
+  // (ws_server.py) and the UI now fetches /api/settings relative to its own
+  // origin, so it follows the port automatically — this setting is belt-and-braces.
   "remote.autoForwardPorts": false,
   "remote.restoreForwardedPorts": false
 }

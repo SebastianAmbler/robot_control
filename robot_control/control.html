@@ -286,7 +286,9 @@
     font-size: 11px;
     color: var(--muted);
     transition: all 0.08s;
+    cursor: pointer;
   }
+  .gear-pip:hover { border-color: var(--accent2); color: var(--text); }
   .gear-pip.active {
     border-color: var(--accent);
     color: var(--accent);
@@ -298,6 +300,15 @@
     color: var(--muted);
     text-transform: uppercase;
     margin-left: 4px;
+  }
+
+  /* ── Servo steps selector (reuses .gear-pip styling) ── */
+  #servo-step-display {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+    min-width: 0;
   }
 
   /* ── WASD visualizer ── */
@@ -330,7 +341,7 @@
   }
 
   /* ── Control mode toggle + gamepad status ── */
-  #mode-toggle, #avatar-toggle {
+  #mode-toggle, #avatar-toggle, #ik-toggle {
     background: transparent;
     border: 1px solid var(--border2);
     color: var(--text);
@@ -342,10 +353,56 @@
     text-transform: uppercase;
     white-space: nowrap;
   }
-  #mode-toggle:hover, #avatar-toggle:hover { border-color: var(--accent); color: var(--accent); }
-  #avatar-toggle.active { border-color: var(--accent2); color: var(--accent2); }
+  #mode-toggle:hover, #avatar-toggle:hover, #ik-toggle:hover { border-color: var(--accent); color: var(--accent); }
+  #avatar-toggle.active, #ik-toggle.active { border-color: var(--accent2); color: var(--accent2); }
   #left-panel #mode-toggle { display: block; width: 100%; }
-  #servo-section #avatar-toggle { flex-shrink: 0; display: block; width: 100%; margin-top: 8px; }
+  #servo-section #avatar-toggle,
+  #servo-section #ik-toggle { flex-shrink: 0; display: block; width: 100%; margin-top: 8px; }
+
+  /* ── IK Y/Z/pitch readout (right of the WASD / D-pad visual) ── */
+  #ik-readout {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+  .ik-axis {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font);
+    font-size: 12px;
+    color: var(--accent);
+    line-height: 1;
+  }
+  .ik-axis .ik-k {
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    width: 10px;
+  }
+  .ik-axis #ik-y, .ik-axis #ik-z, .ik-axis #ik-pitch {
+    min-width: 38px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .ik-nudge-btn {
+    width: 20px;
+    height: 20px;
+    border: 1px solid var(--border2);
+    background: var(--surface2);
+    color: var(--muted);
+    font-family: var(--font);
+    font-size: 12px;
+    font-weight: bold;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  .ik-nudge-btn:hover { border-color: var(--accent); color: var(--accent); }
   #kb-visual {
     display: flex;
     align-items: center;
@@ -507,14 +564,29 @@
     color: var(--accent);
     background: rgba(200,255,0,0.06);
   }
-  .servo-range {
-    font-size: 9px;
-    color: var(--border2);
+  .servo-row { cursor: pointer; }
+  .servo-nudge {
+    display: flex;
+    gap: 3px;
     flex-shrink: 0;
-    min-width: 48px;
-    text-align: right;
-    font-variant-numeric: tabular-nums;
   }
+  .servo-nudge-btn {
+    width: 22px;
+    height: 22px;
+    border: 1px solid var(--border2);
+    background: var(--surface2);
+    color: var(--muted);
+    font-family: var(--font);
+    font-size: 13px;
+    font-weight: bold;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  .servo-nudge-btn:hover { border-color: var(--accent); color: var(--accent); }
 
   /* ── Log ── */
   #log-section {
@@ -1416,6 +1488,10 @@
     <div id="gear-display"></div>
   </div>
   <div class="panel-section">
+    <div class="panel-label">Servo Steps</div>
+    <div id="servo-step-display"></div>
+  </div>
+  <div class="panel-section">
     <div class="panel-label">Control Mode</div>
     <button id="mode-toggle" onclick="cycleControlMode()">Keyboard</button>
   </div>
@@ -1514,6 +1590,7 @@
   <div id="servo-section">
     <div class="panel-label">Servos</div>
     <div id="servo-container"></div>
+    <button id="ik-toggle" onclick="toggleIK()">IK: Off</button>
     <button id="avatar-toggle" onclick="toggleAvatar()">Avatar: Off</button>
   </div>
   <div id="posture-panel">
@@ -1583,6 +1660,23 @@
         </div>
       </div>
       <div id="gp-line"><span id="gp-dot"></span><span id="gp-name">No gamepad — press any button</span></div>
+    </div>
+    <div id="ik-readout" style="display:none">
+      <div class="ik-axis">
+        <span class="ik-k">Y</span><span id="ik-y">15.0</span>
+        <button type="button" class="ik-nudge-btn" onclick="nudgeIK('y', -1)" title="Y −">−</button>
+        <button type="button" class="ik-nudge-btn" onclick="nudgeIK('y', 1)" title="Y +">+</button>
+      </div>
+      <div class="ik-axis">
+        <span class="ik-k">Z</span><span id="ik-z">20.0</span>
+        <button type="button" class="ik-nudge-btn" onclick="nudgeIK('z', -1)" title="Z −">−</button>
+        <button type="button" class="ik-nudge-btn" onclick="nudgeIK('z', 1)" title="Z +">+</button>
+      </div>
+      <div class="ik-axis">
+        <span class="ik-k">P</span><span id="ik-pitch">0</span>
+        <button type="button" class="ik-nudge-btn" onclick="nudgeIK('pitch', -1)" title="Pitch −">−</button>
+        <button type="button" class="ik-nudge-btn" onclick="nudgeIK('pitch', 1)" title="Pitch +">+</button>
+      </div>
     </div>
     <div id="avatar-placeholder" style="display:none"></div>
   </div>
@@ -1986,6 +2080,7 @@
           <label>Cycle control mode</label><input type="text" id="hk-cycleMode" class="hotkey-input" placeholder="unset" title="Click and press a key to bind">
           <label>Toggle avatar arm</label><input type="text" id="hk-avatar" class="hotkey-input" placeholder="unset" title="Click and press a key to bind">
           <label>Toggle webcam</label><input type="text" id="hk-webcam" class="hotkey-input" placeholder="unset" title="Click and press a key to bind">
+          <label>Toggle IK arm</label><input type="text" id="hk-ik" class="hotkey-input" placeholder="unset" title="Click and press a key to bind">
         </div>
         <div class="param-group-label" style="margin-top:10px;">Postures</div>
         <div class="ctl-btn-grid" id="hotkey-posture-grid"></div>
@@ -1999,6 +2094,7 @@
 </div>
 
 <script src="js/state.js"></script>
+<script src="js/ik.js"></script>
 <script src="js/websocket.js"></script>
 <script src="js/drive.js"></script>
 <script src="js/arm.js"></script>

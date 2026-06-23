@@ -92,6 +92,28 @@ let keys      = { w:false, a:false, s:false, d:false };
 let lastLinear  = null;
 let lastAngular = null;
 
+// ─── Inverse kinematics (IK) ──────────────────────────────────────────────────
+// When ikOn, the arm is driven in Cartesian space via {cmd:"ik",y,z,pitch}: the
+// Teensy solves IK and moves servos 3/4/6 (see applyIK in teensycodeNew.ino).
+// ikState is the live target (start pose y=15,z=20,pitch=0); operator input is
+// integrated into it by the tick in ik.js. ikKeys tracks held arrow keys/modifiers
+// in keyboard mode; the analog sticks drive it in controller mode.
+let ikOn    = false;
+// Default/home IK pose — restored when the "home" posture is applied (see applyPosture).
+const IK_HOME = { y: 15.0, z: 20.0, pitch: 0 };
+let ikState = { ...IK_HOME };
+let ikKeys  = { yInc:false, yDec:false, zInc:false, zDec:false, pInc:false, pDec:false };
+
+// Movement rates (units/sec) and clamp ranges. y/z are cm in the arm's YZ plane,
+// pitch is degrees. Clamps are conservative bounds within the arm's reach
+// (firmware geometry H=11.5, L1=18.5, L2=13.5, L3=10).
+const IK = {
+  rateYZ:    12,   // cm per second at full deflection
+  ratePitch: 60,   // deg per second at full deflection
+  min: { y: 5,  z: 0,  pitch: -90 },
+  max: { y: 40, z: 45, pitch:  90 },
+};
+
 // ─── Servo definitions (matches Arduino sketch) ───────────────────────────────
 // id: 1-based servo id sent in JSON cmd
 // min/max: hard limits from SERVO_MIN/MAX in sketch
@@ -106,7 +128,7 @@ const SERVOS = [
   { id: 7, key: "k", name: "Wrist Roll", min:   0, max: 180, home: 122 },
   { id: 8, key: "l", name: "Gripper",    min:   0, max: 180, home:  90 },
 ];
-const SERVO_STEP = 5;
+let SERVO_STEP = 5;   // degrees per +/- nudge; chosen via the Servo Steps selector (hotkeys 1-5)
 let activeServoId = null;
 
 // In-code defaults for servo travel limits (used by Reset)
@@ -239,6 +261,7 @@ const HOTKEYS_DEFAULTS = {
   cycleMode: "m",                 // cycle keyboard → controller
   avatar:    "v",                 // toggle the avatar teleop arm on/off
   webcam:    "p",                 // toggle the webcam overlay
+  ik:        ";",                 // toggle IK (Cartesian arm) control
   // One key per posture, in POSTURE_NAMES order → F1 = home, F2 = stair, …
   postures:  Object.fromEntries(POSTURE_NAMES.map((n, i) => [n, "F" + (i + 1)])),
 };
@@ -249,6 +272,7 @@ function mergeHotkeySettings(h) {
   if (typeof h.cycleMode === "string" && h.cycleMode) HOTKEYS.cycleMode = h.cycleMode;
   if (typeof h.avatar    === "string" && h.avatar)    HOTKEYS.avatar    = h.avatar;
   if (typeof h.webcam    === "string" && h.webcam)    HOTKEYS.webcam    = h.webcam;
+  if (typeof h.ik        === "string" && h.ik)        HOTKEYS.ik        = h.ik;
   if (h.postures) {
     POSTURE_NAMES.forEach(name => {
       if (typeof h.postures[name] === "string" && h.postures[name]) HOTKEYS.postures[name] = h.postures[name];

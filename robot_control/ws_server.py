@@ -84,7 +84,7 @@ UDP_ANGLES_PORT = 3392            # port UDPS.py forwards ANGLES:/DATA: readback
 
 WS_HOST       = "0.0.0.0"
 WS_PORT       = 8765
-HTTP_PORT     = 8766              # HTTP server for settings file I/O
+HTTP_PORT     = 8780              # HTTP server for settings file I/O (8766 collides with VS Code's node port-forwarder)
 
 # ─── Avatar mode config (ported from testcode2/avatar.py) ──────────────────────
 # A physical "avatar" arm (a Teensy exposing 3 potentiometers over USB serial)
@@ -171,6 +171,7 @@ DEFAULT_SETTINGS = {
     "hotkeys": {
         "cycleMode": "m",
         "webcam": "p",
+        "ik": ";",
         "postures": {
             "home": "F1", "stair": "F2", "ramp": "F3", "fold": "F4",
             "giraffe": "F5", "finish": "F6", "backramp": "F7"
@@ -397,7 +398,7 @@ def parse_line(raw):
             result = []
             for pin in TEENSY_PINS:
                 pw = vals.get(pin, 0)
-                result.append(90 if pw == 0 else
+                result.append(90 if pw == 0 else    
                                max(0, min(180, int((pw - 1000) * 180 / 1000))))
             return result
 
@@ -1111,6 +1112,15 @@ async def handler(websocket):
                         "id": servo_id,
                         "angle": angle
                     }).encode()
+                    udp_sock.sendto(bytes([0xAA]) + payload, (PI_IP, UDP_SERVO_PORT))
+
+                elif cmd == "ik":
+                    # Cartesian arm target solved on the Teensy (applyIK). Forward
+                    # over the same 0xAA-marked serial path as servo/laser/led.
+                    y     = float(obj.get("y"))
+                    z     = float(obj.get("z"))
+                    pitch = float(obj.get("pitch", 0.0))
+                    payload = json.dumps({"cmd": "ik", "y": y, "z": z, "pitch": pitch}).encode()
                     udp_sock.sendto(bytes([0xAA]) + payload, (PI_IP, UDP_SERVO_PORT))
 
                 elif cmd in ("laser", "led"):

@@ -49,7 +49,7 @@ bool homed = false;
 String inputBuffer = "";
 
 // ── Current servo angles ─────────────────────────────────────
-int currentAngles[8] = {90, 90, 115, 25, 0, 90, 90, 90};
+int currentAngles[8] = {90, 90, 130, 35, 0, 90, 90, 90};
 //                       0     1     2    3   4     5    6   7
 // idx:                front back  arm1 arm2 arm3 arm4 arm5 grip
 
@@ -66,9 +66,9 @@ int currentAngles[8] = {90, 90, 115, 25, 0, 90, 90, 90};
 //  in moveServoById(); the values here are secondary guards only.
 // ═══════════════════════════════════════════════════════════════
 
-const int SERVO_MIN[8] = {0,   30,  50,  25,  0,  0,  0,  0};
+const int SERVO_MIN[8] = {0,   30,  20,  25,  0,  0,  0,  0};
 
-const int SERVO_MAX[8] = {180, 150, 130, 150, 155, 180, 180, 180};
+const int SERVO_MAX[8] = {180, 150, 130, 150, 155, 110, 180, 180};
 
 // ── Helper: clamp angle to per-joint hard limits ─────────────
 // id is 1-based (servo id as used in JSON commands)
@@ -101,18 +101,18 @@ int clampToLimits(int id, int angle) {
 float IK_H  = 11.5f;   // floor → Shoulder pivot height
 float IK_L1 = 18.5f;   // Shoulder → Elbow
 float IK_L2 = 13.5f;   // Elbow → Wrist
-float IK_L3 = 12.0f;   // Wrist → TCP (end-effector)
+float IK_L3 = 10.0f;   // Wrist → TCP (end-effector)
 
 // Joint offsets: raw servo angle when joint is at 0°
-float IK_OFF[3] = { 30.0f, 20.0f, 20.0f };   // [Shoulder, Elbow, Wrist]
+float IK_OFF[3] = { 20.0f, 110.0f, 80.0f };   // [Shoulder, Elbow, Wrist]
 
 // Inversion flags: true = servo decreases as joint angle increases
-bool  IK_INV[3] = { false, true, false };
+bool  IK_INV[3] = { false, false, false };
 
 // Servo angle clamps for IK joints — kept in sync with SERVO_MIN/MAX
 // [Shoulder=id3, Elbow=id4, Wrist=id5]
-float IK_SV_MIN[3] = { 90.0f,  60.0f,  0.0f };
-float IK_SV_MAX[3] = { 180.0f, 180.0f, 90.0f };
+float IK_SV_MIN[3] = { 30.0f,  25.0f,  0.0f };
+float IK_SV_MAX[3] = { 130.0f, 150.0f, 110.0f };
 
 // IK solution branch: true = elbow-up, false = elbow-down
 bool IK_ELBOW_UP = true;
@@ -208,7 +208,7 @@ bool applyIK(float y, float z, float pitchDeg) {
   // Apply hard joint limits (second pass, consistent with direct servo cmd)
   s0 = clampToLimits(3, s0);
   s1 = clampToLimits(4, s1);
-  s2 = clampToLimits(5, s2);
+  s2 = clampToLimits(6, s2);
 
   servoarm1.write(s0); currentAngles[2] = s0;
   servoarm2.write(s1); currentAngles[3] = s1;
@@ -497,8 +497,8 @@ void setup() {
 
   servoFrontMotor.attach(PIN_FRONT);  servoFrontMotor.write(90);   currentAngles[0] = 90;
   servoBackMotor.attach(PIN_BACK);    servoBackMotor.write(90);   currentAngles[1] = 90;
-  servoarm1.attach(PIN_ARM1);         servoarm1.write(115);        currentAngles[2] = 115;
-  servoarm2.attach(PIN_ARM2);         servoarm2.write(25);        currentAngles[3] = 25;
+  servoarm1.attach(PIN_ARM1);         servoarm1.write(130);        currentAngles[2] = 130;
+  servoarm2.attach(PIN_ARM2);         servoarm2.write(35);        currentAngles[3] = 35;
   servoarm3.attach(PIN_ARM3);         servoarm3.write(0);          currentAngles[4] = 0;
   servoarm4.attach(PIN_ARM4);         servoarm4.write(90);        currentAngles[5] = 90;
   servoarm5.attach(PIN_ARM5);         servoarm5.write(90);        currentAngles[6] = 90;
@@ -536,8 +536,8 @@ void loop() {
   if (!homed) {
     servoFrontMotor.write(90);   currentAngles[0] = 90;  delay(200);
     servoBackMotor.write(90);   currentAngles[1] = 90; delay(200);
-    servoarm1.write(115);        currentAngles[2] = 115; delay(200);
-    servoarm2.write(25);        currentAngles[3] = 25; delay(200);
+    servoarm1.write(130);        currentAngles[2] = 130; delay(200);
+    servoarm2.write(35);        currentAngles[3] = 35; delay(200);
     servoarm3.write(0);          currentAngles[4] = 0;  delay(200);
     servoarm4.write(90);        currentAngles[5] = 90;  delay(200);
     servoarm5.write(90);        currentAngles[6] = 90; delay(200);

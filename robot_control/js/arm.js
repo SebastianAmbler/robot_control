@@ -16,8 +16,16 @@ function buildServoUI() {
         <span class="servo-angle" id="sv-angle-${s.id}">${s.home}°</span>
       </div>
       <div class="servo-hotkey">${s.key}</div>
-      <div class="servo-range">${s.min}-${s.max}</div>
+      <div class="servo-nudge">
+        <button type="button" class="servo-nudge-btn" id="sv-dec-${s.id}" title="${s.name} −${SERVO_STEP}° (range ${s.min}-${s.max})">−</button>
+        <button type="button" class="servo-nudge-btn" id="sv-inc-${s.id}" title="${s.name} +${SERVO_STEP}° (range ${s.min}-${s.max})">+</button>
+      </div>
       <input type="hidden" id="sv-slider-${s.id}" value="${s.home}">`;
+    // Click the row to select this servo (mirrors its hotkey); the −/+ buttons
+    // nudge its angle by SERVO_STEP (mirrors the +/- keys on the active servo).
+    row.addEventListener("click", () => selectServo(s.id));
+    row.querySelector(`#sv-dec-${s.id}`).addEventListener("click", e => { e.stopPropagation(); nudgeServo(s.id, -SERVO_STEP); });
+    row.querySelector(`#sv-inc-${s.id}`).addEventListener("click", e => { e.stopPropagation(); nudgeServo(s.id, SERVO_STEP); });
     container.appendChild(row);
   });
   updateActiveServoUI();
@@ -289,6 +297,13 @@ function applyPosture(name) {
     const servo = SERVOS[i];
     if (servo) setServoAngle(servo.id, angle, true);
   });
+  // Home posture also resets the IK target back to its start pose so Cartesian
+  // control resumes from a known point (mirrors the servo home angles).
+  if (name === "home") {
+    ikState = { ...IK_HOME };
+    updateIKReadout();
+    if (ikOn) sendIK();
+  }
   log("Posture applied: " + postureLabel(name), "info");
 }
 
@@ -299,8 +314,10 @@ function updateActiveServoUI() {
   });
 }
 
-function selectServoByKey(key) {
-  const servo = SERVOS.find(s => s.key === key);
+// Make a servo the active one (highlighted + target of the +/- keys). Shared by
+// the keyboard hotkeys and the clickable servo rows.
+function selectServo(id) {
+  const servo = SERVOS.find(s => s.id === id);
   if (!servo) return false;
   activeServoId = servo.id;
   updateActiveServoUI();
@@ -308,10 +325,22 @@ function selectServoByKey(key) {
   return true;
 }
 
+function selectServoByKey(key) {
+  const servo = SERVOS.find(s => s.key === key);
+  return servo ? selectServo(servo.id) : false;
+}
+
 function nudgeActiveServo(delta) {
   if (!activeServoId) return false;
   setServoAngle(activeServoId, getServoAngle(activeServoId) + delta);
   return true;
+}
+
+// Nudge a specific servo (used by the row's −/+ buttons): select it first so the
+// highlight + keyboard +/- follow the click, then adjust its angle.
+function nudgeServo(id, delta) {
+  if (!selectServo(id)) return;
+  setServoAngle(id, getServoAngle(id) + delta);
 }
 
 // ─── Update sliders from typed Teensy JSON feedback ──────────────────────────

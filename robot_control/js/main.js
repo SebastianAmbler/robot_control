@@ -14,11 +14,11 @@ function postSimState(angles) {
 // Persist the IMU zero to settings.json without disturbing other settings:
 // read the file, merge in imuZero, write it back (POST overwrites the whole file).
 function persistImuZero() {
-  fetch("http://localhost:8766/api/settings")
+  fetch("/api/settings")
     .then(r => r.json())
     .then(s => {
       s.imuZero = IMU_ZERO;
-      return fetch("http://localhost:8766/api/settings", {
+      return fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(s),
@@ -97,6 +97,11 @@ function updateModeUI() {
     avBtn.textContent = "Avatar: " + (avatarOn ? "On" : "Off");
     avBtn.classList.toggle("active", avatarOn);
   }
+  const ikBtn = document.getElementById("ik-toggle");
+  if (ikBtn) {
+    ikBtn.textContent = "IK: " + (ikOn ? "On" : "Off");
+    ikBtn.classList.toggle("active", ikOn);
+  }
   const show = (id, on) => {
     const el = document.getElementById(id);
     if (el) el.style.display = on ? "" : "none";
@@ -104,6 +109,7 @@ function updateModeUI() {
   show("kb-visual", controlMode === "keyboard");
   show("gamepad-status", controlMode === "controller");
   show("avatar-placeholder", avatarOn);
+  show("ik-readout", ikOn);
   if (controlMode === "controller") updateGamepadStatusUI();
 }
 
@@ -782,6 +788,7 @@ function handleHotkey(e) {
   if (matchesHotkey(k, HOTKEYS.cycleMode)) { cycleControlMode(); return true; }
   if (matchesHotkey(k, HOTKEYS.avatar))    { toggleAvatar();     return true; }
   if (matchesHotkey(k, HOTKEYS.webcam))    { toggleWebcam();     return true; }
+  if (matchesHotkey(k, HOTKEYS.ik))        { toggleIK();         return true; }
   for (const name of POSTURE_NAMES) {
     if (matchesHotkey(k, HOTKEYS.postures[name])) { applyPosture(name); return true; }
   }

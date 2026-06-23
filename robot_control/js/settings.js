@@ -14,6 +14,7 @@ function saveSettings() {
     simFromUDPS: document.getElementById("sim-from-udps-chk").checked,
     controlMode: controlMode,
     avatarOn: avatarOn,
+    ikOn: ikOn,
   }));
 }
 
@@ -42,6 +43,7 @@ function loadSettings() {
       controlMode = s.controlMode;
     }
     avatarOn = !!s.avatarOn;
+    ikOn = !!s.ikOn;
     updateModeUI();
     if (s.autoConnect) {
       document.getElementById("auto-connect-chk").checked = true;
@@ -195,6 +197,7 @@ function populateHotkeyParams() {
   setHk("hk-cycleMode", HOTKEYS.cycleMode);
   setHk("hk-avatar",    HOTKEYS.avatar);
   setHk("hk-webcam",    HOTKEYS.webcam);
+  setHk("hk-ik",        HOTKEYS.ik);
   POSTURE_NAMES.forEach(name => setHk("hk-posture-" + name, HOTKEYS.postures[name]));
 }
 
@@ -205,6 +208,8 @@ function readHotkeysFromParams() {
   if (av) HOTKEYS.avatar = av;
   const wc = document.getElementById("hk-webcam")?.value.trim();
   if (wc) HOTKEYS.webcam = wc;
+  const ik = document.getElementById("hk-ik")?.value.trim();
+  if (ik) HOTKEYS.ik = ik;
   POSTURE_NAMES.forEach(name => {
     const v = document.getElementById("hk-posture-" + name)?.value.trim();
     if (v) HOTKEYS.postures[name] = v;
@@ -213,7 +218,7 @@ function readHotkeysFromParams() {
 
 function loadParams() {
   // Load from file-based API
-  fetch("http://localhost:8766/api/settings")
+  fetch("/api/settings")
     .then(r => r.json())
     .then(p => {
       // Update GEARS from file
@@ -499,7 +504,7 @@ function saveParams() {
   });
 
   // Save to file via API
-  fetch("http://localhost:8766/api/settings", {
+  fetch("/api/settings", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -522,6 +527,7 @@ function saveParams() {
   .then(r => r.json())
   .then(data => {
     buildGearUI();
+    buildServoStepUI();
     buildServoUI();
     buildPostureUI();
     // Push updated CAL to iframe immediately
@@ -571,7 +577,7 @@ function resetParams() {
       compass: { ...COMPASS_DEFAULTS },
     };
 
-    fetch("http://localhost:8766/api/settings", {
+    fetch("/api/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(defaults)
@@ -601,6 +607,7 @@ function resetParams() {
       populateControllerParams();
       populateHotkeyParams();
       buildGearUI();
+      buildServoStepUI();
       buildServoUI();
       buildPostureUI();
       buildPostureParamUI();
@@ -619,7 +626,7 @@ function resetParams() {
 // ─── Parameters persist ───────────────────────────────────────────────────────
 function loadParamSettings() {
   // Load from file-based API on startup
-  fetch("http://localhost:8766/api/settings")
+  fetch("/api/settings")
     .then(r => r.json())
     .then(p => {
       if (p.gears && Array.isArray(p.gears)) {
@@ -668,6 +675,7 @@ function loadParamSettings() {
       mergeCompassSettings(p.compass);
       // Rebuild UI with loaded settings
       buildGearUI();
+      buildServoStepUI();
       buildServoUI();
       buildPostureUI();
       applyCamerasToParams();
@@ -681,6 +689,7 @@ function loadParamSettings() {
       log("Warning: Could not load parameters from file. Using defaults. (" + e.message + ")", "warn");
       // Build UI with defaults as fallback
       buildGearUI();
+      buildServoStepUI();
       buildServoUI();
       buildPostureUI();
       applyCamerasToParams();
