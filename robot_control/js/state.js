@@ -157,14 +157,18 @@ function servoLimitsMap() {
 }
 
 // ─── Avatar arm calibration ───────────────────────────────────────────────────
-// Physical teleop arm: 3 potentiometers map to servos 3/4/5. Each channel maps a
-// raw pot value (in0..in1) onto a servo angle range (out0..out1), optionally
-// reversed. Mirrors the `avatar` block in settings.json / ws_server.py's CALIB —
-// keep pot/sid/order in sync. Only rev/in0/in1/out0/out1 are user-editable.
+// Physical teleop arm: 6 potentiometers map to servos 3/4/6/5/7/8. Each channel
+// maps a raw pot value (in0..in1) onto a servo angle range (out0..out1),
+// optionally reversed. Mirrors the `avatar` block in settings.json /
+// ws_server.py's CALIB — keep pot/sid/order in sync. Only rev/in0/in1/out0/out1
+// are user-editable.
 const AVATAR_CALIB_DEFAULTS = [
   { pot: 0, sid: 3, rev: false, in0: 0,   in1: 180, out0: 40, out1: 165, name: "Arm1 shoulder" },
   { pot: 1, sid: 4, rev: true,  in0: 122, in1: 180, out0: 30, out1: 150, name: "Arm2 elbow" },
   { pot: 2, sid: 6, rev: false, in0: 0,   in1: 180, out0: 20, out1: 180, name: "Wrist J6" },
+  { pot: 3, sid: 5, rev: false, in0: 15,  in1: 76,  out0: 0,  out1: 155, name: "Extend" },
+  { pot: 4, sid: 7, rev: false, in0: 107, in1: 170, out0: 0,  out1: 180, name: "Wrist roll" },
+  { pot: 5, sid: 8, rev: false, in0: 75,  in1: 113, out0: 0,  out1: 180, name: "Gripper" },
 ];
 const AVATAR_DEADBAND_DEFAULT = 2;
 let AVATAR_CALIB = AVATAR_CALIB_DEFAULTS.map(c => ({ ...c }));

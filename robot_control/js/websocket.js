@@ -61,10 +61,8 @@ function connectWS(silent) {
     setStatus(true);
     document.getElementById("ws-connect").textContent = "Disconnect";
     log("Connected", "info");
-    // No need to re-arm avatar mode here: the server sends an avatar_sync
-    // message right after connecting with the bridge's actual current state
-    // (which may differ from our local avatarOn if the board's physical
-    // toggle button changed it while we were disconnected).
+    // Re-arm the server-side avatar bridge if the toggle was left on.
+    if (avatarOn) send({ cmd: "avatar", state: 1 });
   };
   ws.onclose = () => {
     setStatus(false);
@@ -101,11 +99,17 @@ function connectWS(silent) {
       // Avatar arm echo: update slider/label + 3D sim without re-sending to server.
       if (obj.cmd === "servo") { setServoAngle(obj.id, obj.angle, false); return; }
       if (obj.cmd === "avatar_status") { return; }
-      // Avatar on/off, as the server's actual current state — set by the
-      // website's own button OR by the physical toggle button on the avatar
-      // board. Apply locally only; never echo {cmd:"avatar"} back here, or a
-      // server/client loop would re-trigger this on every change.
-      if (obj.cmd === "avatar_sync") { applyAvatarSync(!!obj.state); return; }
+      // Avatar on/off state, pushed by the server when the PHYSICAL button on the
+      // avatar arm toggles it, or right after connecting (to sync to the bridge's
+      // real current state). Update the UI in place — do NOT call setAvatar()/
+      // send {cmd:"avatar"} back here, or we'd loop the command back to the server.
+      if (obj.cmd === "avatar") {
+        avatarOn = !!obj.state;
+        updateModeUI();
+        saveSettings();
+        log("Avatar arm: " + (avatarOn ? "on" : "off"), "info");
+        return;
+      }
       // QR logging (BTN 1): status drives the button's lit state; detect logs a code.
       if (obj.cmd === "qr_status") { applyQrStatus(obj); return; }
       if (obj.cmd === "qr_detect") { applyQrDetect(obj); return; }

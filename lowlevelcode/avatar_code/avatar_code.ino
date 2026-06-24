@@ -5,7 +5,7 @@
 int analogPins[] = {A1, A2, A3, A5, A4, A6};
 int digitalPin = 14;
 bool toggle = false;
-unsigned long debounceTime = 100;
+unsigned long debounceTime = 30;
 unsigned long lastMillis = 0;
 bool buttonState = LOW;
 bool lastFlickerState = LOW;
