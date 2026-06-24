@@ -275,6 +275,36 @@
         "out0": 0,
         "out1": 110,
         "name": "Wrist J6"
+      },
+      {
+        "pot": 3,
+        "sid": 5,
+        "rev": false,
+        "in0": 15,
+        "in1": 76,
+        "out0": 0,
+        "out1": 155,
+        "name": "Extend"
+      },
+      {
+        "pot": 4,
+        "sid": 7,
+        "rev": false,
+        "in0": 107,
+        "in1": 170,
+        "out0": 0,
+        "out1": 180,
+        "name": "Wrist roll"
+      },
+      {
+        "pot": 5,
+        "sid": 8,
+        "rev": false,
+        "in0": 75,
+        "in1": 113,
+        "out0": 0,
+        "out1": 180,
+        "name": "Gripper"
       }
     ]
   },

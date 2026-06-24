@@ -89,6 +89,19 @@ function setAvatar(on) {
   log("Avatar arm: " + (avatarOn ? "on" : "off"), "info");
 }
 
+// Apply the server's authoritative avatar on/off state (sent on connect and
+// whenever the physical toggle button on the avatar board flips it). Mirrors
+// setAvatar()'s UI update but does NOT send {cmd:"avatar"} back to the
+// server — that command is what changes state in the first place, so echoing
+// it here would just bounce straight back as another avatar_sync.
+function applyAvatarSync(on) {
+  if (avatarOn === on) return;
+  avatarOn = on;
+  updateModeUI();
+  saveSettings();
+  log("Avatar arm: " + (avatarOn ? "on" : "off") + " (synced from board)", "info");
+}
+
 function updateModeUI() {
   const btn = document.getElementById("mode-toggle");
   if (btn) btn.textContent = MODE_LABELS[controlMode];
