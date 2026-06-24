@@ -2,7 +2,7 @@
 #define SMOOTH_SIZE 8
 #define DEADBAND 7
 
-int analogPins[] = {A1, A2, A3, A4, A5, A6};
+int analogPins[] = {A1, A2, A3, A5, A4, A6};
 int digitalPin = 14;
 bool toggle = false;
 unsigned long debounceTime = 100;

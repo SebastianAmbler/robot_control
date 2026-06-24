@@ -196,9 +196,10 @@
     "deadzone": 0.15
   },
   "hotkeys": {
-    "cycleMode": "\\",
+    "cycleMode": "m",
     "avatar": "t",
     "webcam": "p",
+    "ik": ";",
     "postures": {
       "home": "F1",
       "stair": "F2",
@@ -239,8 +240,8 @@
       "max": 180
     },
     "8": {
-      "min": 0,
-      "max": 180
+      "min": 70,
+      "max": 113
     }
   },
   "avatar": {
@@ -263,7 +264,7 @@
         "in0": 81,
         "in1": 153,
         "out0": 30,
-        "out1": 140,
+        "out1": 105,
         "name": "Arm2 elbow"
       },
       {
@@ -276,24 +277,24 @@
         "out1": 110,
         "name": "Wrist J6"
       },
-      {
+            {
         "pot": 3,
         "sid": 5,
         "rev": false,
-        "in0": 15,
-        "in1": 76,
+        "in0": 107,
+        "in1": 170,
         "out0": 0,
-        "out1": 155,
+        "out1": 180,
         "name": "Extend"
       },
       {
         "pot": 4,
         "sid": 7,
         "rev": false,
-        "in0": 107,
-        "in1": 170,
+        "in0": 15,
+        "in1": 76,
         "out0": 0,
-        "out1": 180,
+        "out1": 155,
         "name": "Wrist roll"
       },
       {
@@ -302,8 +303,8 @@
         "rev": false,
         "in0": 75,
         "in1": 113,
-        "out0": 0,
-        "out1": 180,
+        "out0": 70,
+        "out1": 113,
         "name": "Gripper"
       }
     ]

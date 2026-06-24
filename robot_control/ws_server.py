@@ -114,6 +114,10 @@ TEENSY_PINS     = [3, 4, 5, 6, 7, 8]
 SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
 SETTINGS_FILE = os.path.join(SCRIPT_DIR, "settings.json")
 
+# Destination for maps/markers auto-uploaded from the Pi (slam_manager) over
+# POST /api/upload-map — replaces the manual `scp -r pi@...:savedMaps .` step.
+SAVED_MAPS_DIR = os.path.join(SCRIPT_DIR, "savedMaps")
+
 # ─── QR code logging config (BTN 1 on the webcam toolbar) ──────────────────────
 # Decodes QR codes off the Pi's MJPEG feed and logs each unique code to a
 # timestamped CSV in savedCSV/. Header/filename fields below match the RoboCup
@@ -295,7 +299,8 @@ class SettingsHTTPHandler(BaseHTTPRequestHandler):
             self._serve_file(self.path)
 
     def do_POST(self):
-        """Handle POST requests for saving settings."""
+        """Handle POST requests for saving settings, and file uploads from the
+        Pi (slam_manager pushing saved maps/markers — see do_POST_upload_map)."""
         if self.path == "/api/settings":
             try:
                 content_length = int(self.headers.get("Content-Length", 0))
@@ -316,16 +321,81 @@ class SettingsHTTPHandler(BaseHTTPRequestHandler):
                 print(f"[Settings] Error: {e}")
                 self.send_response(400)
                 self.end_headers()
+        elif self.path == "/api/upload-map":
+            self._handle_upload_map()
         else:
             self.send_response(404)
             self.end_headers()
+
+    def _json_response(self, code, obj):
+        body = json.dumps(obj).encode()
+        self.send_response(code)
+        self.send_header("Content-type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self._send_cors()
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _handle_upload_map(self):
+        """Receive one raw file in the request body and write it under
+        SAVED_MAPS_DIR. The Pi (slam_manager._upload_files) sends one POST per
+        file, naming it via the X-Filename header and (optionally) placing it
+        in a subfolder via X-Subdir — this is the auto-upload replacement for
+        the manual `scp -r pi@...:savedMaps .` step.
+
+        Both headers are sanitised the same way _serve_file guards against
+        path traversal: reject anything that normalises outside SAVED_MAPS_DIR.
+        """
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+        except (TypeError, ValueError):
+            self._json_response(400, {"status": "error", "error": "bad Content-Length"})
+            return
+
+        raw_name = self.headers.get("X-Filename", "")
+        raw_subdir = self.headers.get("X-Subdir", "")
+        filename = os.path.basename(unquote(raw_name)).strip()
+        if not filename:
+            self._json_response(400, {"status": "error", "error": "missing X-Filename"})
+            return
+
+        subdir = unquote(raw_subdir).strip().strip("/\\")
+        dest_dir = os.path.normpath(os.path.join(SAVED_MAPS_DIR, subdir)) if subdir else SAVED_MAPS_DIR
+        root = os.path.normpath(SAVED_MAPS_DIR)
+        # Anchor on root + sep (not just root) so a sibling dir like
+        # "savedMaps2" can't pass a bare startswith(root) check.
+        if not (dest_dir == root or dest_dir.startswith(root + os.sep)):
+            self._json_response(403, {"status": "error", "error": "invalid subdir"})
+            return
+        dest_path = os.path.normpath(os.path.join(dest_dir, filename))
+        if not (dest_path == root or dest_path.startswith(root + os.sep)):
+            self._json_response(403, {"status": "error", "error": "invalid filename"})
+            return
+
+        try:
+            os.makedirs(dest_dir, exist_ok=True)
+            written = 0
+            with open(dest_path, "wb") as f:
+                remaining = content_length
+                while remaining > 0:
+                    chunk = self.rfile.read(min(65536, remaining))
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    written += len(chunk)
+                    remaining -= len(chunk)
+            self._json_response(200, {"status": "ok", "path": dest_path, "bytes": written})
+            print(f"[Upload] {dest_path}  ({written} bytes)")
+        except Exception as e:
+            print(f"[Upload] Error writing {dest_path}: {e}")
+            self._json_response(500, {"status": "error", "error": str(e)})
 
     def do_OPTIONS(self):
         """Handle CORS preflight requests."""
         self.send_response(200)
         self._send_cors()
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Filename, X-Subdir")
         self.end_headers()
 
     def log_message(self, format, *args):
@@ -383,14 +453,11 @@ def find_avatar_teensy():
 
 
 def parse_line(raw):
-    """Parse a serial line into (angles, toggle). `angles` is a list of 6 pot
-    angles (0-180); `toggle` is the avatar_code.ino digital-button bit (0/1) if
-    present on the line, else None. See avatar_code.ino / testcode2/avatar.py.
-    """
+    """Parse a serial line into a list of pot angles (0-180). See avatar.py."""
     if raw.startswith(('ANGLES:', 'DATA:', '===')):
         return None
 
-    # Format 2: D3=1770 D4=0 D5=1500  (no toggle bit in this format)
+    # Format 2: D3=1770 D4=0 D5=1500
     if '=' in raw and raw[0] in ('D', 'A'):
         vals = {}
         for part in raw.split():
@@ -406,22 +473,15 @@ def parse_line(raw):
                 pw = vals.get(pin, 0)
                 result.append(90 if pw == 0 else    
                                max(0, min(180, int((pw - 1000) * 180 / 1000))))
-            return result, None
+            return result
 
-    # Format 1 (avatar_code.ino): "90,145,60,90,60,90,1" — 6 pot angles
-    # (0-180) followed by the digital-pin toggle bit (0/1).
+    # Format 1: comma "90,145,60"
     parts = raw.split(',')
     if len(parts) >= AVATAR_NUM_POTS:
         try:
             vals = [int(p.strip()) for p in parts[:AVATAR_NUM_POTS]]
-            if not all(0 <= v <= 180 for v in vals):
-                return None
-            toggle = None
-            if len(parts) > AVATAR_NUM_POTS:
-                tog_raw = parts[AVATAR_NUM_POTS].strip()
-                if tog_raw in ('0', '1'):
-                    toggle = int(tog_raw)
-            return vals, toggle
+            if all(0 <= v <= 180 for v in vals):
+                return vals
         except Exception:
             pass
 
@@ -447,81 +507,45 @@ def avatar_status(text):
         )
 
 
-def avatar_sync(on):
-    """Broadcast the avatar arm's actual on/off state to all WS clients, so the
-    website's Avatar button/UI follows the physical toggle button on the
-    avatar_code.ino board (rather than only the website driving the board)."""
-    if event_loop is not None and connected_clients:
-        asyncio.run_coroutine_threadsafe(
-            broadcast(json.dumps({"cmd": "avatar_sync", "state": 1 if on else 0})),
-            event_loop,
-        )
-
-
 class AvatarBridge:
-    """Continuously reads the avatar_code.ino board (6 pots + 1 digital toggle
-    button, all on one serial line) and drives servos 3/4/5 while enabled.
+    """Reads the physical avatar arm and drives servos 3/4/5.
 
-    The serial port is opened once and read for as long as the server runs —
-    independent of whether avatar mode is currently on — because the board's
-    physical toggle button must be able to turn avatar mode on/off even when
-    the website hasn't done so yet. `start()`/`stop()` (called from the
-    website's Avatar button / hotkey) and the board's own toggle-bit edges both
-    just flip `self._enabled`; either source can turn it on or off, and a
-    change from either side is broadcast to all UI clients via avatar_sync()
-    so the website's button always reflects the arm's actual state.
+    Started/stopped on demand when the UI enters/leaves Avatar mode. Sends servo
+    commands to the Pi over UDP (same path as cmd:"servo") and echoes each angle
+    back to WS clients so the sliders / 3D sim track the physical arm.
     """
 
     def __init__(self):
-        self._reader_thread = None
+        self._thread = None
         self._stop = threading.Event()
-        self._enabled = False
-        self._last_board_toggle = None   # last toggle bit seen from the board
-        self._calib = CALIB
-        self._deadband = AVATAR_DEADBAND
 
     @property
     def running(self):
-        return self._enabled
+        return self._thread is not None and self._thread.is_alive()
 
-    def start_reader(self):
-        """Open the serial port and start reading it. Call once at server boot;
-        keeps running regardless of avatar on/off so the toggle button works."""
-        if self._reader_thread is not None and self._reader_thread.is_alive():
+    def start(self):
+        if self.running:
             return
         if serial is None:
             print("[Avatar] pyserial not installed — run `pip install pyserial`")
+            avatar_status("Avatar unavailable — pyserial not installed")
             return
         self._stop.clear()
-        self._reader_thread = threading.Thread(target=self._run, daemon=True)
-        self._reader_thread.start()
-
-    def start(self):
-        """Turn avatar mode on (called from the website)."""
-        if self._enabled:
-            return
-        self._refresh_calib()
-        self._enabled = True
-        avatar_status("Avatar arm enabled")
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
 
     def stop(self):
-        """Turn avatar mode off (called from the website)."""
-        if not self._enabled:
-            return
-        self._enabled = False
-        avatar_status("Avatar mode idle")
-
-    def _set_enabled_from_board(self, on):
-        """Toggle-button edge from avatar_code.ino: flip mode and sync the UI."""
-        if on == self._enabled:
-            return
-        if on:
-            self._refresh_calib()
-        self._enabled = on
-        avatar_status("Avatar arm enabled (board button)" if on else "Avatar mode idle (board button)")
-        avatar_sync(on)
+        self._stop.set()
+        # Thread is daemon and closes its own serial port on exit; no join needed.
+        self._thread = None
 
     def _run(self):
+        # Pull calibration from settings.json so saved values take effect,
+        # falling back to the in-code CALIB / AVATAR_DEADBAND defaults.
+        avatar_cfg = load_settings().get("avatar", {})
+        calib = avatar_cfg.get("calib") or CALIB
+        deadband = avatar_cfg.get("deadband", AVATAR_DEADBAND)
+
         port = None
         try:
             port = find_avatar_teensy()
@@ -538,7 +562,8 @@ class AvatarBridge:
             avatar_status(f"Avatar arm not found ({port})")
             return
 
-        print(f"[Avatar] Reader running on {port} (toggle button + servos 3/4/5)")
+        print(f"[Avatar] Bridge running on {port} → servos 3/4/5 → Pi")
+        avatar_status(f"Avatar arm connected ({port}) → Shoulder / Elbow / Extend")
         prev = {}
         try:
             while not self._stop.is_set():
@@ -546,27 +571,9 @@ class AvatarBridge:
                     raw = t1.readline().decode(errors='ignore').strip()
                     if not raw:
                         continue
-                    parsed = parse_line(raw)
-                    if parsed is None:
+                    vals = parse_line(raw)
+                    if vals is None:
                         continue
-                    vals, toggle = parsed
-
-                    # Board's digital-pin toggle bit drives avatar on/off, synced
-                    # to every connected UI. Only act on a change (edge), and
-                    # ignore the very first reading so a stale/held button state
-                    # at boot doesn't immediately flip the mode.
-                    if toggle is not None:
-                        if self._last_board_toggle is None:
-                            self._last_board_toggle = toggle
-                        elif toggle != self._last_board_toggle:
-                            self._last_board_toggle = toggle
-                            self._set_enabled_from_board(bool(toggle))
-
-                    if not self._enabled:
-                        continue
-
-                    # Calibration was refreshed when avatar mode was last enabled.
-                    calib, deadband = self._calib, self._deadband
                     for i, c in enumerate(calib):
                         if i >= len(vals):
                             continue
@@ -582,16 +589,8 @@ class AvatarBridge:
                 t1.close()
             except Exception:
                 pass
-            print("[Avatar] Reader stopped")
-
-    def _refresh_calib(self):
-        # Pull calibration from settings.json so saved values take effect,
-        # falling back to the in-code CALIB / AVATAR_DEADBAND defaults.
-        # Called whenever avatar mode is (re)enabled, from either the website
-        # or the board's own toggle button.
-        avatar_cfg = load_settings().get("avatar", {})
-        self._calib = avatar_cfg.get("calib") or CALIB
-        self._deadband = avatar_cfg.get("deadband", AVATAR_DEADBAND)
+            print("[Avatar] Bridge stopped")
+            avatar_status("Avatar mode idle")
 
     def _send_servo(self, sid, angle):
         # 1) Drive the real servo via the Pi (same path as cmd:"servo").
@@ -1157,14 +1156,6 @@ motion_bridge = MotionBridge()
 async def handler(websocket):
     connected_clients.add(websocket)
     print(f"[WS] Client connected: {websocket.remote_address}")
-    # Tell the newly-connected UI the avatar arm's actual current state (it may
-    # have been turned on/off by the board's physical button, or by another
-    # client, while this one wasn't connected) rather than trusting its own
-    # possibly-stale localStorage value.
-    try:
-        await websocket.send(json.dumps({"cmd": "avatar_sync", "state": 1 if avatar_bridge.running else 0}))
-    except Exception:
-        pass
     try:
         async for message in websocket:
             try:
@@ -1272,15 +1263,12 @@ async def main():
     t2 = threading.Thread(target=udp_feedback_thread, args=(loop, angles_sock), daemon=True)
     t2.start()
 
-    # Start the avatar board reader (always-on, independent of avatar on/off)
-    # so the board's physical toggle button can flip avatar mode itself.
-    avatar_bridge.start_reader()
-
     print(f"[WS] Server running on ws://{WS_HOST}:{WS_PORT}")
     print(f"[WS] Forwarding UDP to {PI_IP}:{UDP_CMD_PORT}")
     print(f"[WS] Listening for UDP feedback on port {UDP_FB_PORT}")
     print(f"[WS] Listening for servo angle readback on port {UDP_ANGLES_PORT}")
     print(f"[Settings] File-based storage enabled: {SETTINGS_FILE}")
+    print(f"[Upload]  Maps/markers pushed from the Pi land in: {SAVED_MAPS_DIR}")
     print(f"[HTTP]    Open  http://localhost:{HTTP_PORT}/control.html  in your browser.\n")
 
     async with websockets.serve(handler, WS_HOST, WS_PORT):
