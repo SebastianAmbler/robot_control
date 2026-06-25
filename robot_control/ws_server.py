@@ -114,6 +114,10 @@ TEENSY_PINS     = [3, 4, 5, 6, 7, 8]
 SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
 SETTINGS_FILE = os.path.join(SCRIPT_DIR, "settings.json")
 
+# Where the Pi's slam_manager auto-uploads exported maps (+ markers CSV) to.
+# Each export lands in its own subfolder, e.g. savedMaps/map_20260625_143000/.
+SAVED_MAPS_DIR = os.path.join(SCRIPT_DIR, "savedMaps")
+
 # ─── QR code logging config (BTN 1 on the webcam toolbar) ──────────────────────
 # Decodes QR codes off the Pi's MJPEG feed and logs each unique code to a
 # timestamped CSV in savedCSV/. Header/filename fields below match the RoboCup
@@ -142,7 +146,7 @@ QR_MARKER_MIN_SEC = 3         # min seconds between markers sent to SLAM
 # MJPEG feed, on the GPU via onnxruntime-gpu, and streams bounding boxes to the
 # UI. See _add_cuda_dll_dirs() above for the CUDA DLL setup.
 AI_STREAM_URL = QR_STREAM_URL
-AI_MODEL_PATH = os.path.join(SCRIPT_DIR, "X7.onnx")
+AI_MODEL_PATH = os.path.join(SCRIPT_DIR, "best.onnx")
 AI_IMGSZ      = 640      # model input size (square); from the model's imgsz metadata
 AI_CONF       = 0.35     # min confidence to keep a detection
 AI_IOU        = 0.45     # NMS IoU threshold
@@ -295,7 +299,7 @@ class SettingsHTTPHandler(BaseHTTPRequestHandler):
             self._serve_file(self.path)
 
     def do_POST(self):
-        """Handle POST requests for saving settings."""
+        """Handle POST requests for saving settings + Pi map uploads."""
         if self.path == "/api/settings":
             try:
                 content_length = int(self.headers.get("Content-Length", 0))
@@ -316,9 +320,74 @@ class SettingsHTTPHandler(BaseHTTPRequestHandler):
                 print(f"[Settings] Error: {e}")
                 self.send_response(400)
                 self.end_headers()
+        elif self.path == "/api/upload-map":
+            self._handle_upload_map()
         else:
             self.send_response(404)
             self.end_headers()
+
+    def _handle_upload_map(self):
+        """Receive one file pushed by the Pi's slam_manager (_upload_one_file):
+        raw bytes in the body, filename/subfolder in X-Filename/X-Subdir headers.
+        Writes to SAVED_MAPS_DIR/<subdir>/<filename>, replacing the manual
+        `scp -r pi@<pi-ip>:~/savedMaps .` step."""
+        try:
+            filename = self.headers.get("X-Filename", "")
+            subdir   = self.headers.get("X-Subdir", "")
+            if not filename:
+                self.send_response(400)
+                self._send_cors()
+                self.end_headers()
+                self.wfile.write(b'{"status":"error","message":"missing X-Filename"}')
+                return
+
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+
+            # Anchor with os.sep (not just startswith) so a sibling directory
+            # like savedMaps_evil can't be reached by a crafted subdir/filename —
+            # same guard pattern as _serve_file's path-traversal check above.
+            root = os.path.normpath(SAVED_MAPS_DIR)
+            dest_dir = os.path.normpath(os.path.join(root, subdir)) if subdir else root
+            if not (dest_dir == root or dest_dir.startswith(root + os.sep)):
+                self.send_response(403)
+                self._send_cors()
+                self.end_headers()
+                self.wfile.write(b'{"status":"error","message":"invalid subdir"}')
+                return
+
+            # Strip any path component from both slash styles explicitly —
+            # os.path.basename only honours the *current* OS's separator, and
+            # this header value originates off-host (the Pi), so don't rely on
+            # platform-specific parsing for a security boundary.
+            safe_name = filename.replace("\\", "/").split("/")[-1]
+            dest_path = os.path.normpath(os.path.join(dest_dir, safe_name))
+            if not (dest_path == root or dest_path.startswith(root + os.sep)):
+                self.send_response(403)
+                self._send_cors()
+                self.end_headers()
+                self.wfile.write(b'{"status":"error","message":"invalid filename"}')
+                return
+
+            os.makedirs(dest_dir, exist_ok=True)
+            with open(dest_path, "wb") as f:
+                f.write(body)
+
+            self.send_response(200)
+            self.send_header("Content-type", "application/json")
+            self._send_cors()
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "ok", "path": dest_path}).encode())
+            print(f"[MapUpload] Received {safe_name} ({len(body)} bytes) -> {dest_path}")
+        except Exception as e:
+            print(f"[MapUpload] Error: {e}")
+            self.send_response(500)
+            self._send_cors()
+            self.end_headers()
+            try:
+                self.wfile.write(json.dumps({"status": "error", "message": str(e)}).encode())
+            except Exception:
+                pass
 
     def do_OPTIONS(self):
         """Handle CORS preflight requests."""

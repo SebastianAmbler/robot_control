@@ -343,10 +343,18 @@ void handleJson(String &line) {
     Serial.println(IK_OFF[2],1);
   }
   // ── Laser control ─────────────────────────────────────────
+ // ── Laser control ─────────────────────────────────────────
   else if (strcmp(cmd, "laser") == 0) {
     int state = doc["state"] | 0;   // 1 = on, 0 = off
     digitalWrite(LASER, state ? HIGH : LOW);
     Serial.print(F("[LASER] "));
+    Serial.println(state ? F("ON") : F("OFF"));
+  }
+  // ── LED control ───────────────────────────────────────────
+  else if (strcmp(cmd, "led") == 0) {
+    int state = doc["state"] | 0;   // 1 = on, 0 = off
+    digitalWrite(LED, state ? HIGH : LOW);
+    Serial.print(F("[LED] "));
     Serial.println(state ? F("ON") : F("OFF"));
   }
   else {
@@ -457,6 +465,7 @@ void waitForI2C(uint8_t addr, const char* name) {
 void setup() {
   pinMode(LED_PIN, OUTPUT);
   pinMode(LASER, OUTPUT);
+  pinMode(LED, OUTPUT);          // ← add this line
 
   for (int i = 0; i < 5; i++) {
     digitalWrite(LED_PIN, HIGH); delay(200);
@@ -468,6 +477,7 @@ void setup() {
   Serial.begin(115200);
   Serial.println(F("=== BOOT — rescue_arm_ik + compass ==="));
   digitalWrite(LASER, 0);
+  digitalWrite(LED, 0);         
 
   // ── I2C bus + sensor init ──────────────────────────────────
   // Wire must start before any device init. We then block on each
