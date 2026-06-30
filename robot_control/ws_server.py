@@ -146,7 +146,7 @@ QR_MARKER_MIN_SEC = 3         # min seconds between markers sent to SLAM
 # MJPEG feed, on the GPU via onnxruntime-gpu, and streams bounding boxes to the
 # UI. See _add_cuda_dll_dirs() above for the CUDA DLL setup.
 AI_STREAM_URL = QR_STREAM_URL
-AI_MODEL_PATH = os.path.join(SCRIPT_DIR, "best.onnx")
+AI_MODEL_PATH = os.path.join(SCRIPT_DIR, "X7.onnx")
 AI_IMGSZ      = 640      # model input size (square); from the model's imgsz metadata
 AI_CONF       = 0.35     # min confidence to keep a detection
 AI_IOU        = 0.45     # NMS IoU threshold
