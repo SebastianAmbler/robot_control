@@ -12,7 +12,7 @@ import threading
 # ═══════════════════════════════════════════════════════════════
 #  ★ SET THESE MANUALLY ★
 # ═══════════════════════════════════════════════════════════════
-MEGA_PORT  = "/dev/ttyACM0"
+MEGA_PORT  = "/dev/teensy"
 BAUD_RATE  = 115200
 
 # ── UDP ───────────────────────────────────────────────────────
@@ -21,6 +21,13 @@ LISTEN_PORT = 3391
 
 # ── Angles readback ───────────────────────────────────────────
 PC_ANGLES_PORT = 3392
+
+# ── Local arm-angle tap ───────────────────────────────────────
+# Arm angle lines are also forwarded to localhost here so the arm_home_guard
+# ROS node can pause SLAM while the arm is out of its home pose. Independent of
+# PC discovery (always on) — the serial port can only be opened once, by us.
+LOCAL_ANGLES_IP   = "127.0.0.1"
+LOCAL_ANGLES_PORT = 3393
 
 # ── Packet constants ──────────────────────────────────────────
 SERVO_MARKER = 0xAA
@@ -156,6 +163,15 @@ class MegaSerial:
 
                 # ── DEBUG: print every line from Mega so you can see what it sends ──
                 print(f"[MEGA RX] {repr(line)}")
+
+                # ── Local tap: forward arm-angle lines to the SLAM arm guard ──
+                # (arm_home_guard pauses SLAM while the arm is out of home).
+                if line.startswith('{"type":"angles"') or line.startswith("ANGLES:"):
+                    try:
+                        forward_sock.sendto(
+                            line.encode(), (LOCAL_ANGLES_IP, LOCAL_ANGLES_PORT))
+                    except OSError:
+                        pass
 
                 # Forward the legacy ANGLES:/DATA: readback AND the new typed
                 # JSON broadcasts ({"type":"angles"|"compass"|"thermal",...}) the

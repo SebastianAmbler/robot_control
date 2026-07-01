@@ -514,9 +514,13 @@ function renderThermal(data) {
   const span = (THERMAL.max - THERMAL.min) || 1;   // guard against min == max
   for (let row = 0; row < 8; row++) {
     for (let col = 0; col < 8; col++) {
-      // Read from a (possibly mirrored) source cell; write to the natural one.
-      const sr = THERMAL.flipV ? 7 - row : row;
-      const sc = THERMAL.flipH ? 7 - col : col;
+      // The AMG8833 is mounted rotated 90° relative to the display, so rotate
+      // the source grid 90° clockwise first: dest (row,col) ← src (7-col,row).
+      // Then apply the optional H/V mirroring on top of the rotated cell.
+      let sr = 7 - col;
+      let sc = row;
+      if (THERMAL.flipV) sr = 7 - sr;
+      if (THERMAL.flipH) sc = 7 - sc;
       const norm = (data[sr * 8 + sc] - THERMAL.min) / span;
       const [r, g, b] = thermalColor(norm);
       const p = (row * 8 + col) * 4;
